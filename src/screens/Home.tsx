@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, ScrollView, StyleSheet, Text, TouchableOpacity } from 'react-native';
-import MeteringCard from '../components/MeteringCard';
+import MeteringCard from '../components/MeteringCard/MeteringCard';
 
 const data = [
     { patientName: 'João da Silva', date: '05/12/2024', status: 'danger' },

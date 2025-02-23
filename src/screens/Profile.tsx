@@ -1,7 +1,18 @@
-import React, { useState } from 'react';
-import { View, Text, FlatList, StyleSheet, TouchableOpacity, Modal, Button } from 'react-native';
+import { Patient, usePatientDatabase } from '@/database/usePatientDatabase';
+import React, { useEffect, useState } from 'react';
+import {
+    View,
+    Text,
+    FlatList,
+    StyleSheet,
+    TouchableOpacity,
+    Modal,
+    TextInput,
+    Button,
+    Alert,
+} from 'react-native';
 
-const patients = [
+const initialPatients = [
     {
         id: '1',
         name: 'João da Silva',
@@ -32,9 +43,21 @@ const patients = [
 ];
 
 export default function Profile() {
-    const [selectedPatient, setSelectedPatient] = useState<null | (typeof patients)[0]>(null);
+    const [patients, setPatients] = useState(initialPatients);
+    const [selectedPatient, setSelectedPatient] = useState<null | (typeof initialPatients)[0]>(
+        null
+    );
+    const [isAddModalVisible, setIsAddModalVisible] = useState(false);
+    const [formData, setFormData] = useState({
+        name: '',
+        age: '',
+        maritalStatus: '',
+        address: '',
+        observations: '',
+    });
+    const pacientDatabase = usePatientDatabase();
 
-    const handlePressPatient = (patient: (typeof patients)[0]) => {
+    const handlePressPatient = (patient: (typeof initialPatients)[0]) => {
         setSelectedPatient(patient);
     };
 
@@ -42,9 +65,69 @@ export default function Profile() {
         setSelectedPatient(null);
     };
 
+    const toggleAddModal = () => {
+        setIsAddModalVisible(!isAddModalVisible);
+    };
+
+    const handleInputChange = (field: string, value: string) => {
+        setFormData((prev) => ({ ...prev, [field]: value }));
+    };
+
+    const handleAddPatient = async () => {
+        if (!formData.name || !formData.age) {
+            Alert.alert('Erro', 'Os campos Nome e Idade são obrigatórios.');
+            return;
+        }
+
+        try {
+            const res = await pacientDatabase.create({
+                name: formData.name,
+                age: parseInt(formData.age, 10),
+                maritalStatus: formData.maritalStatus || 'Não informado',
+                address: formData.address || 'Não informado',
+                observations: formData.observations || 'Nenhuma observação.',
+            });
+
+            Alert.alert('Sucesso', 'Paciente adicionado com sucesso.');
+        } catch (error) {
+            console.log(error);
+        }
+
+        setFormData({
+            name: '',
+            age: '',
+            maritalStatus: '',
+            address: '',
+            observations: '',
+        });
+        toggleAddModal();
+    };
+
+    const reloadPatients = async () => {
+        try {
+            const patients = await pacientDatabase.getAll();
+            setPatients(patients as any);
+        } catch (error) {
+            console.log(error);
+        }
+    };
+
+    useEffect(() => {
+        console.log('[!] Getting patients from database');
+        reloadPatients();
+    }, []);
+
     return (
         <View style={styles.container}>
-            <Text style={styles.header}>Lista de Pacientes</Text>
+            <View style={styles.headerContainer}>
+                <Text style={styles.header}>Lista de Pacientes</Text>
+                <TouchableOpacity style={styles.addButton} onPress={reloadPatients}>
+                    <Text style={styles.addButtonText}>↻</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.addButton} onPress={toggleAddModal}>
+                    <Text style={styles.addButtonText}>+</Text>
+                </TouchableOpacity>
+            </View>
             <FlatList
                 data={patients}
                 keyExtractor={(item) => item.id}
@@ -58,7 +141,8 @@ export default function Profile() {
                 )}
             />
 
-            <Modal visible={!!selectedPatient} animationType="slide" transparent>
+            {/* Detalhes do Paciente */}
+            <Modal visible={!!selectedPatient} animationType="fade" transparent>
                 <View style={styles.modalContainer}>
                     <View style={styles.modalContent}>
                         {selectedPatient && (
@@ -77,6 +161,48 @@ export default function Profile() {
                     </View>
                 </View>
             </Modal>
+
+            {/* Modal para Adicionar Paciente */}
+            <Modal visible={isAddModalVisible} animationType="fade" transparent>
+                <View style={styles.modalContainer}>
+                    <View style={styles.modalContent}>
+                        <Text style={styles.modalTitle}>Adicionar Paciente</Text>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Nome (Obrigatório)"
+                            value={formData.name}
+                            onChangeText={(text) => handleInputChange('name', text)}
+                        />
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Idade (Obrigatório)"
+                            value={formData.age}
+                            onChangeText={(text) => handleInputChange('age', text)}
+                            keyboardType="numeric"
+                        />
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Estado Civil"
+                            value={formData.maritalStatus}
+                            onChangeText={(text) => handleInputChange('maritalStatus', text)}
+                        />
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Endereço"
+                            value={formData.address}
+                            onChangeText={(text) => handleInputChange('address', text)}
+                        />
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Observações"
+                            value={formData.observations}
+                            onChangeText={(text) => handleInputChange('observations', text)}
+                        />
+                        <Button title="Salvar" onPress={handleAddPatient} />
+                        <Button title="Cancelar" onPress={toggleAddModal} />
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 }
@@ -87,10 +213,28 @@ const styles = StyleSheet.create({
         backgroundColor: '#f9f9f9',
         padding: 10,
     },
+    headerContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 10,
+    },
     header: {
         fontSize: 20,
         fontWeight: 'bold',
-        margin: 10,
+    },
+    addButton: {
+        backgroundColor: '#007BFF',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: 20,
+        width: 40,
+        height: 40,
+    },
+    addButtonText: {
+        color: '#fff',
+        fontSize: 18,
+        fontWeight: 'bold',
     },
     patientCard: {
         padding: 15,
@@ -108,7 +252,6 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        gap: 10,
     },
     modalContent: {
         width: '80%',
@@ -126,5 +269,13 @@ const styles = StyleSheet.create({
         marginTop: 10,
         fontStyle: 'italic',
         marginBottom: 20,
+    },
+    input: {
+        borderWidth: 1,
+        borderColor: '#ccc',
+        borderRadius: 8,
+        padding: 10,
+        marginBottom: 10,
+        width: '100%',
     },
 });

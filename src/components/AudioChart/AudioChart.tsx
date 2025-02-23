@@ -10,7 +10,8 @@ const AudioChart: React.FC<AudioChartProps> = ({ data }) => {
     const screenWidth = Dimensions.get('window').width;
     const scrollViewRef = useRef<ScrollView>(null);
 
-    let modifiedData = data.length > 2 ? data.slice(1, -1) : data;
+    // let modifiedData = data; //data.length > 2 ? data.slice(1, -1) : data;
+    let modifiedData = data.map((value) => value + 160);
 
     useEffect(() => {
         if (scrollViewRef.current) {
@@ -19,46 +20,41 @@ const AudioChart: React.FC<AudioChartProps> = ({ data }) => {
     }, [data]);
 
     return (
-        <View style={{ backgroundColor: 'transparent', borderRadius: 16 }}>
+        <View style={{ backgroundColor: 'pink', borderRadius: 16 }}>
             <ScrollView
                 horizontal
                 ref={scrollViewRef} // Atribui a referência ao ScrollView
             >
                 <LineChart
+                    xAxisLabel="Time"
                     data={{
                         labels: [],
                         datasets: [
                             {
                                 data: modifiedData,
-                                color: (opacity = 1) => `rgba(255, 69, 0, 0.4)`,
+                                color: (opacity = 1) => `rgb(255, 68, 0)`,
                             },
                         ],
                     }}
-                    width={Math.max(screenWidth, modifiedData.length)}
+                    width={Math.max(screenWidth * 0.8, modifiedData.length)}
                     height={320}
                     withShadow={false}
                     withDots={false}
-                    withVerticalLabels={false}
-                    withHorizontalLabels={false}
-                    withVerticalLines={false}
+                    // withVerticalLabels={true}
+                    // withHorizontalLabels={true}
+                    // withVerticalLines={false}
                     yAxisInterval={1}
-                    transparent={true}
+                    // transparent={true}
                     chartConfig={{
-                        backgroundGradientFrom: 'transparent',
                         backgroundGradientFromOpacity: 0,
-                        backgroundGradientTo: 'transparent',
                         backgroundGradientToOpacity: 0,
-                        decimalPlaces: 4,
-                        color: (opacity = 1) => `transparent`,
+                        decimalPlaces: 1,
+                        color: (opacity = 1) => `gray`,
                         style: {
                             borderRadius: 16,
                         },
                     }}
                     bezier
-                    style={{
-                        marginVertical: 8,
-                        marginLeft: -(screenWidth * 0.1),
-                    }}
                 />
             </ScrollView>
         </View>

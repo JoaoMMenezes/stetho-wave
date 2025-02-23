@@ -12,8 +12,7 @@ import {
 } from 'react-native';
 import { Audio } from 'expo-av';
 import { Recording } from 'expo-av/build/Audio';
-import MemoListItem from '../components/MemoListItem';
-import AudioChart from '../components/AudioChart';
+import AudioChart from '../components/AudioChart/AudioChart';
 import React from 'react';
 import { MaterialIcons } from '@expo/vector-icons';
 
@@ -87,6 +86,7 @@ export default function Metering() {
     }
 
     function handleSave() {
+        // Será usado o db para salvar os dados
         if (recordingUri) {
             setMemos((existingMemos) => [
                 {
@@ -113,30 +113,11 @@ export default function Metering() {
 
     return (
         <View style={styles.container}>
-            <ScrollView style={styles.listContainer}>
-                {memos.map((memo, index) => (
-                    <MemoListItem
-                        key={index}
-                        uri={memo.uri}
-                        activeMemo={activeMemo}
-                        setActiveMemo={setActiveMemo}
-                        setCurrentMeteringData={setCurrentMeteringData}
-                        meteringData={memo.meteringData}
-                        patientName={memo.patientName}
-                        date={memo.date}
-                        observations={memo.observations}
-                    />
-                ))}
-            </ScrollView>
-
-            <AudioChart data={currentMeteringData} />
+            <View style={styles.audioChart}>
+                <AudioChart data={currentMeteringData} />
+            </View>
 
             <View style={styles.footer}>
-                <Pressable style={styles.iconButton} onPress={() => setCurrentMeteringData([0])}>
-                    <MaterialIcons name="delete-sweep" size={24} color="gray" />
-                    <Text style={styles.iconText}>Limpar Gráfico</Text>
-                </Pressable>
-
                 <Pressable
                     style={styles.recordButton}
                     onPress={recording ? stopRecording : startRecording}
@@ -148,11 +129,6 @@ export default function Metering() {
                             { opacity: recording ? 0.5 : 1 },
                         ]}
                     />
-                </Pressable>
-
-                <Pressable style={styles.iconButton} onPress={() => setMemos([])}>
-                    <MaterialIcons name="delete" size={24} color="gray" />
-                    <Text style={styles.iconText}>Limpar Gravações</Text>
                 </Pressable>
             </View>
 
@@ -198,15 +174,22 @@ export default function Metering() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, justifyContent: 'center', paddingTop: 30, marginTop: 30 },
-    listContainer: { flex: 1, marginBottom: 10 },
+    container: {
+        flex: 1,
+        justifyContent: 'space-between',
+        height: '100%',
+        backgroundColor: 'white',
+    },
+    audioChart: {
+        marginTop: '20%',
+    },
     footer: {
-        height: 150,
+        height: 100,
         alignItems: 'center',
         justifyContent: 'space-around',
         flexDirection: 'row',
+        backgroundColor: 'white',
     },
-    iconButton: { alignItems: 'center', justifyContent: 'center' },
     recordButton: {
         width: 60,
         height: 60,
