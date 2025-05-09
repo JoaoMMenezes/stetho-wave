@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, ScrollView, StyleSheet, Text, TouchableOpacity } from 'react-native';
-import MeteringCard from '../components/MeteringCard/MeteringCard';
+import { styles } from './_layout';
+import MeteringCard from '../../components/MeteringCard/MeteringCard';
 
 const data = [
     { patientName: 'João da Silva', date: '05/12/2024', status: 'danger' },
@@ -54,37 +55,3 @@ export default function Home() {
         </View>
     );
 }
-
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#f9f9f9',
-    },
-    filterContainer: {
-        flexDirection: 'row',
-        justifyContent: 'space-around',
-        paddingVertical: 10,
-        backgroundColor: '#fff',
-        borderBottomWidth: 1,
-        borderBottomColor: '#ddd',
-    },
-    filterButton: {
-        paddingVertical: 6,
-        paddingHorizontal: 14,
-        borderRadius: 20,
-        backgroundColor: '#f0f0f0',
-    },
-    activeFilter: {
-        backgroundColor: '#007BFF',
-    },
-    filterText: {
-        fontSize: 14,
-        color: '#555',
-    },
-    activeFilterText: {
-        color: '#fff',
-    },
-    cardsContainer: {
-        paddingVertical: 10,
-    },
-});

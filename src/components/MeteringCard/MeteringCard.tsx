@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { styles } from './_layout';
 
 interface MeteringCardProps {
     patientName: string;
@@ -34,29 +35,3 @@ export default function MeteringCard({ patientName, date, status }: MeteringCard
         </View>
     );
 }
-
-const styles = StyleSheet.create({
-    card: {
-        backgroundColor: '#fff',
-        borderRadius: 10,
-        padding: 10,
-        marginVertical: 8,
-        marginHorizontal: 16,
-        shadowColor: '#000',
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 2,
-    },
-    header: {
-        borderBottomWidth: 1,
-        borderBottomColor: '#eee',
-        paddingBottom: 6,
-        marginBottom: 8,
-    },
-    patientName: { fontSize: 16, fontWeight: 'bold', color: '#333' },
-    body: { marginBottom: 8 },
-    date: { fontSize: 14, color: '#555' },
-    footer: {
-        alignItems: 'flex-end',
-    },
-});

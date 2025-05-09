@@ -1,0 +1,56 @@
+import { StyleSheet } from 'react-native';
+
+export const styles = StyleSheet.create({
+    container: {
+        flex: 1,
+        justifyContent: 'space-between',
+        height: '100%',
+    },
+    ChartContainer: {
+        marginTop: '30%',
+        width: '90%',
+        height: '45%',
+        margin: 20,
+        padding: 10,
+        borderBlockColor: 'black',
+        borderWidth: 2,
+        borderRadius: 28,
+        backgroundColor: 'white',
+    },
+    footer: {
+        height: 100,
+        alignItems: 'center',
+        justifyContent: 'space-around',
+        flexDirection: 'row',
+        backgroundColor: 'white',
+    },
+    recordButton: {
+        width: 60,
+        height: 60,
+        borderRadius: 60,
+        borderWidth: 2,
+        borderColor: 'gray',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    redCircle: { aspectRatio: 1, backgroundColor: 'orangered', borderRadius: 30 },
+    iconText: { fontSize: 12, color: 'gray', marginTop: 4 },
+    modalContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    modalContent: {
+        width: '80%',
+        backgroundColor: 'white',
+        padding: 20,
+        borderRadius: 10,
+        elevation: 5,
+    },
+    saveButton: { alignSelf: 'center', width: '40%', marginTop: 10 },
+    input: {
+        height: 40,
+        borderColor: 'rgba(0, 0, 0, 0.4)',
+        borderWidth: 1,
+        borderRadius: 6,
+        marginBottom: 12,
+        paddingHorizontal: 10,
+    },
+    closeButton: { alignSelf: 'flex-end', marginBottom: 10 },
+});
