@@ -8,8 +8,29 @@ import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 const Tab = createBottomTabNavigator();
 
 export default function TabRoutes() {
+    const headerOptions = {
+        headerShown: true,
+        headerTitleAlign: 'center' as 'center',
+        headerTitleStyle: {
+            fontSize: 30,
+            color: 'white',
+        },
+        headerStyle: {
+            shadowColor: '#000',
+            height: 50,
+            backgroundColor: '#228be6',
+            shadowOffset: {
+                width: 0,
+                height: 10,
+            },
+        },
+    };
+
     return (
-        <Tab.Navigator screenOptions={{ headerShown: false }}>
+        <Tab.Navigator
+            screenOptions={{ ...headerOptions, tabBarShowLabel: false }}
+            initialRouteName="Metering"
+        >
             <Tab.Screen
                 name="Home"
                 component={Home}
@@ -17,7 +38,7 @@ export default function TabRoutes() {
                     tabBarIcon: ({ focused }) => (
                         <FontAwesome5 name="home" size={22} color={focused ? '#001d27' : 'gray'} />
                     ),
-                    tabBarShowLabel: false,
+                    headerTitle: 'Últimas Auscultas',
                 }}
             />
             <Tab.Screen
@@ -31,7 +52,7 @@ export default function TabRoutes() {
                             color={focused ? '#001d27' : 'gray'}
                         />
                     ),
-                    tabBarShowLabel: false,
+                    headerTitle: 'Nova Ausculta',
                 }}
             />
             <Tab.Screen
@@ -45,7 +66,7 @@ export default function TabRoutes() {
                             color={focused ? '#001d27' : 'gray'}
                         />
                     ),
-                    tabBarShowLabel: false,
+                    headerTitle: 'Pacientes',
                 }}
             />
         </Tab.Navigator>
