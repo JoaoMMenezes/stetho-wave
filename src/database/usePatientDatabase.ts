@@ -33,16 +33,61 @@ export function usePatientDatabase() {
         }
     }
 
-    async function update(data: Patient) {
-        // Implementar
+    async function update(id: number, data: Patient) {
+        const statement = await database.prepareAsync(`
+            UPDATE patient
+            SET name = $name,
+                age = $age,
+                marital_status = $maritalStatus,
+                address = $address,
+                observations = $observations
+            WHERE id = $id
+        `);
+
+        try {
+            await statement.executeAsync({
+                $id: id,
+                $name: data.name,
+                $age: data.age,
+                $maritalStatus: data.maritalStatus,
+                $address: data.address,
+                $observations: data.observations,
+            });
+        } catch (error) {
+            throw error;
+        }
     }
 
     async function remove(id: number) {
-        // Implementar
+        try {
+            await database.runAsync(`DELETE FROM patient WHERE id = ?`, [id]);
+        } catch (error) {
+            throw error;
+        }
     }
 
-    async function get(id: number) {
-        // Implementar
+    async function get(id: number): Promise<Patient | null> {
+        try {
+            const result = await database.getFirstAsync<Patient>(
+                `SELECT * FROM patient WHERE id = ?`,
+                [id]
+            );
+            return result ?? null;
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    async function searchByName(name: string): Promise<Patient[]> {
+        try {
+            const result = await database.getAllAsync<Patient>(
+                `SELECT * FROM patient WHERE name LIKE ?`,
+                [`%${name}%`]
+            );
+            return result;
+        } catch (error) {
+            throw error;
+        }
     }
 
     async function getAll() {
@@ -56,5 +101,5 @@ export function usePatientDatabase() {
         }
     }
 
-    return { create, update, remove, get, getAll };
+    return { create, update, remove, get, searchByName, getAll };
 }

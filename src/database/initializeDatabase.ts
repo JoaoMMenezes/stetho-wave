@@ -1,13 +1,12 @@
 import { type SQLiteDatabase } from 'expo-sqlite';
 
 export async function initializeDatabase(database: SQLiteDatabase) {
-    // await database.execAsync(`
-    //     DROP TABLE IF EXISTS patient;
-    // `);
+    const testingFlag = true; // Set to true for testing
 
-    // await database.execAsync(`
-    //     DROP TABLE IF EXISTS metering;
-    // `);
+    if (testingFlag) {
+        await database.execAsync(`DROP TABLE IF EXISTS patient;`);
+        await database.execAsync(`DROP TABLE IF EXISTS metering;`);
+    }
 
     await database.execAsync(`
         CREATE TABLE IF NOT EXISTS patient (
@@ -26,6 +25,7 @@ export async function initializeDatabase(database: SQLiteDatabase) {
             patient_id INTEGER NOT NULL,
             date TEXT NOT NULL,
             data TEXT NOT NULL,
+            tag TEXT CHECK (tag IN ('red', 'yellow', 'green', 'blue')),
             FOREIGN KEY (patient_id) REFERENCES patient(id) ON DELETE CASCADE
         );
     `);
