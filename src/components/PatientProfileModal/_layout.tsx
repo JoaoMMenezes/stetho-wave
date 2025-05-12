@@ -4,23 +4,6 @@ export const styles = StyleSheet.create({
     buttonRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        marginTop: 16,
-    },
-
-    cancelButton: {
-        backgroundColor: '#ccc',
-        padding: 10,
-        borderRadius: 6,
-        flex: 1,
-        marginRight: 8,
-    },
-
-    saveButton: {
-        backgroundColor: '#4CAF50',
-        padding: 10,
-        borderRadius: 6,
-        flex: 1,
-        marginLeft: 8,
     },
 
     buttonText: {
@@ -37,15 +20,32 @@ export const styles = StyleSheet.create({
         height: '100%',
         width: '100%',
         backgroundColor: '#a5d8ff',
-        padding: 30,
+        padding: 20,
     },
     patientName: {
-        fontSize: 18,
+        fontSize: 20,
+        textAlign: 'center',
         fontWeight: 'bold',
-        marginBottom: 12,
-        backgroundColor: '#e0f0ff',
         padding: 10,
-        borderRadius: 10,
+        color: 'white',
+        borderRadius: 12,
+        backgroundColor: '#228be6',
+        borderColor: '#228be6',
+        borderWidth: 2,
+        marginBottom: 20,
+    },
+
+    circleButton: {
+        width: 30,
+        height: 30,
+        backgroundColor: 'white',
+        borderColor: '#228be6',
+        borderWidth: 2,
+        borderRadius: 60,
+        alignItems: 'center',
+        alignSelf: 'flex-end',
+        justifyContent: 'center',
+        marginBottom: 10,
     },
     chartContainer: {
         width: '100%',
@@ -74,11 +74,6 @@ export const styles = StyleSheet.create({
         alignItems: 'center',
         marginTop: 10,
     },
-    label: {
-        fontSize: 28,
-        fontWeight: 'bold',
-        color: '#fff',
-    },
     textArea: {
         backgroundColor: '#228be6',
         color: '#fff',
@@ -102,12 +97,23 @@ export const styles = StyleSheet.create({
         alignItems: 'center',
     },
 
+    inputsContainer: {
+        backgroundColor: 'white',
+        borderRadius: 10,
+        padding: 10,
+        height: '60%',
+    },
+
+    meteringsContainer: {
+        height: '50%',
+    },
+
     input: {
-        borderWidth: 1,
-        borderColor: '#ccc',
+        marginHorizontal: 10,
+        borderBottomWidth: 1,
+        borderColor: '#228be6',
         padding: 12,
         marginBottom: 10,
-        borderRadius: 8,
     },
 
     modalHeader: {
@@ -118,10 +124,10 @@ export const styles = StyleSheet.create({
     },
 
     sectionTitle: {
-        fontSize: 16,
-        fontWeight: '600',
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: 'white',
         marginBottom: 8,
-        marginTop: 16,
     },
 
     noDataText: {
@@ -131,13 +137,27 @@ export const styles = StyleSheet.create({
     },
 
     meteringItem: {
-        paddingVertical: 6,
-        paddingHorizontal: 12,
-        backgroundColor: '#f0f0f0',
+        padding: 12,
+        backgroundColor: 'white',
         borderRadius: 6,
         marginBottom: 8,
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
+        shadowColor: 'black',
+        shadowOffset: {
+            width: 0,
+            height: 1,
+        },
+        shadowOpacity: 0.2,
+        elevation: 1,
+    },
+
+    tag: {
+        borderRadius: 20,
+        width: 20,
+        height: 20,
+        borderWidth: 2,
+        borderColor: '#228be6',
     },
 });

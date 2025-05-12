@@ -81,19 +81,68 @@ export default function PatientProfileModal({
         }
     };
 
+    function formatDate(date: Date) {
+        return `${date.getHours().toString().padStart(2, '0')}:${date
+            .getMinutes()
+            .toString()
+            .padStart(2, '0')} - ${date.getDate().toString().padStart(2, '0')}/${(
+            date.getMonth() + 1
+        )
+            .toString()
+            .padStart(2, '0')}/${date.getFullYear()}`;
+    }
+
     return (
         <Modal animationType="fade" transparent visible={visible} onRequestClose={onClose}>
             <View style={styles.modalContainer}>
                 <View style={styles.modalContent}>
-                    {/* Header com nome e botão de edição */}
-                    <View style={styles.modalHeader}>
-                        <Text style={styles.patientName}>{name}</Text>
-                        <TouchableOpacity onPress={() => setIsEditing((prev) => !prev)}>
-                            <MaterialIcons name="edit" size={24} color="black" />
-                        </TouchableOpacity>
+                    {/* Nome do Paciente*/}
+                    <Text numberOfLines={2} ellipsizeMode="tail" style={styles.patientName}>
+                        {name}
+                    </Text>
+
+                    <View
+                        style={{
+                            flexDirection: 'row',
+                            justifyContent: 'space-between',
+                            alignItems: 'flex-end',
+                        }}
+                    >
+                        <Text style={styles.sectionTitle}>Informações:</Text>
+                        {isEditing ? (
+                            <View style={{ flexDirection: 'row', gap: 12 }}>
+                                <TouchableOpacity
+                                    style={[styles.circleButton, { borderColor: 'red' }]}
+                                    onPress={() => setIsEditing(false)}
+                                >
+                                    <MaterialIcons name="close" size={18} color="red" />
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.circleButton, { borderColor: '#4CAF50' }]}
+                                    onPress={handleSubmit}
+                                >
+                                    <MaterialIcons name="check" size={18} color="#4CAF50" />
+                                </TouchableOpacity>
+                            </View>
+                        ) : (
+                            <TouchableOpacity
+                                style={[styles.circleButton, { borderColor: '#228be6' }]}
+                                onPress={() => setIsEditing((prev) => !prev)}
+                            >
+                                <MaterialIcons name="edit" size={18} color="#228be6" />
+                            </TouchableOpacity>
+                        )}
                     </View>
 
-                    <ScrollView>
+                    {/* Campos de informações */}
+                    <ScrollView
+                        contentContainerStyle={{
+                            justifyContent: 'space-between',
+                            flexGrow: 1,
+                            minHeight: 250,
+                        }}
+                        style={styles.inputsContainer}
+                    >
                         <TextInput
                             placeholder="Nome"
                             value={name}
@@ -131,40 +180,36 @@ export default function PatientProfileModal({
                             style={[styles.input, { height: 80 }]}
                             multiline
                         />
+                    </ScrollView>
 
-                        {isEditing && (
-                            <View style={styles.buttonRow}>
-                                <Pressable style={styles.cancelButton} onPress={onClose}>
-                                    <Text style={styles.buttonText}>Cancelar</Text>
+                    {/* Lista de Gravações */}
+                    <Text style={[styles.sectionTitle, { marginTop: 20 }]}>Gravações:</Text>
+                    <ScrollView style={styles.meteringsContainer}>
+                        {meterings.length === 0 ? (
+                            <Text style={styles.noDataText}>Nenhuma gravação encontrada.</Text>
+                        ) : (
+                            meterings.map((m) => (
+                                <Pressable
+                                    key={m.id}
+                                    style={styles.meteringItem}
+                                    onPress={() => {
+                                        setSelectedMetering(m);
+                                        setSaveModalVisible(true);
+                                    }}
+                                >
+                                    <Text style={styles.noDataText}>
+                                        {formatDate(new Date(m.date))}
+                                    </Text>
+                                    <View
+                                        style={[
+                                            styles.tag,
+                                            { backgroundColor: m.tag, opacity: 0.6 },
+                                        ]}
+                                    />
                                 </Pressable>
-                                <Pressable style={styles.saveButton} onPress={handleSubmit}>
-                                    <Text style={styles.buttonText}>Salvar</Text>
-                                </Pressable>
-                            </View>
+                            ))
                         )}
 
-                        <View style={{ marginTop: 20 }}>
-                            <Text style={styles.sectionTitle}>Gravações:</Text>
-                            {meterings.length === 0 ? (
-                                <Text style={styles.noDataText}>Nenhuma gravação encontrada.</Text>
-                            ) : (
-                                meterings.map((m) => (
-                                    <Pressable
-                                        key={m.id}
-                                        style={styles.meteringItem}
-                                        onPress={() => {
-                                            setSelectedMetering(m);
-                                            setSaveModalVisible(true);
-                                        }}
-                                    >
-                                        <Text>{new Date(m.date).toLocaleString()}</Text>
-                                        <Text style={{ color: m.tag }}>{m.tag.toUpperCase()}</Text>
-                                    </Pressable>
-                                ))
-                            )}
-                        </View>
-
-                        {/* TODO: Implementar Modal de medição */}
                         <SaveMeteringModal
                             visible={saveModalVisible}
                             onClose={() => {
