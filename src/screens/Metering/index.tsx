@@ -7,6 +7,8 @@ import { styles } from './_layout';
 import SkiaLineChart from '@/components/SkiaLineChart/SkiaLineChart';
 import { MaterialIcons, Feather, FontAwesome6 } from '@expo/vector-icons';
 import SaveMeteringModal from '@/components/SaveMeteringModal/SaveMeteringModal';
+import { Patient, usePatientDatabase } from '@/database/usePatientDatabase';
+import { useMeteringDatabase } from '@/database/useMeteringDatabase';
 
 interface RecordingData {
     uri: string;
@@ -22,6 +24,20 @@ export default function Metering() {
     const [permissionResponse, requestPermission] = Audio.usePermissions();
     const [currentMeteringData, setCurrentMeteringData] = useState<number[]>([0]);
     const [saveModalVisible, setSaveModalVisible] = useState(false); // <-- Adicionado
+    const [recordings, setRecordings] = useState<RecordingData[]>([]);
+
+    const { create } = useMeteringDatabase();
+
+    const { getAll } = usePatientDatabase();
+    const [patients, setPatients] = useState<Patient[]>([]);
+
+    useEffect(() => {
+        async function loadPatients() {
+            const data = await getAll();
+            setPatients(data as Patient[]);
+        }
+        loadPatients();
+    }, []);
 
     const screenDimensions = Dimensions.get('window');
 
@@ -104,9 +120,24 @@ export default function Metering() {
             <SaveMeteringModal
                 visible={saveModalVisible}
                 onClose={() => setSaveModalVisible(false)}
-                onSave={(data) => {
-                    console.log('Observações salvas:', data.observations);
-                    setSaveModalVisible(false);
+                onSave={async ({ patientId, tag }) => {
+                    if (!recordingUri) return;
+
+                    try {
+                        await create({
+                            patient_id: patientId,
+                            date: new Date().toISOString(),
+                            data: JSON.stringify(currentMeteringData.map((value) => value * -1)),
+                            tag: tag ?? 'blue', // fallback
+                        });
+
+                        console.log('Gravação salva com sucesso!');
+                        setRecordingUri(null);
+                        setCurrentMeteringData([0]);
+                        setSaveModalVisible(false);
+                    } catch (error) {
+                        console.error('Erro ao salvar metering:', error);
+                    }
                 }}
                 onDelete={() => {
                     setRecordingUri(null);

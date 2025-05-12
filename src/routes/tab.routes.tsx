@@ -2,7 +2,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 
 import Home from '../screens/Home';
 import Metering from '../screens/Metering';
-import Profile from '../screens/Profile';
+import Patients from '../screens/Patients';
 import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 
 const Tab = createBottomTabNavigator();
@@ -56,8 +56,8 @@ export default function TabRoutes() {
                 }}
             />
             <Tab.Screen
-                name="Profile"
-                component={Profile}
+                name="Patients"
+                component={Patients}
                 options={{
                     tabBarIcon: ({ focused }) => (
                         <FontAwesome5

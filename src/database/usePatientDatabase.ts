@@ -33,7 +33,7 @@ export function usePatientDatabase() {
         }
     }
 
-    async function update(id: number, data: Patient) {
+    async function update(id: number, data: Omit<Patient, 'id'>) {
         const statement = await database.prepareAsync(`
             UPDATE patient
             SET name = $name,
