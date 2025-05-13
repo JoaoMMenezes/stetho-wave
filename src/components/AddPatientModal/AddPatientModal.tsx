@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { Modal, View, Text, TextInput, Pressable, StyleSheet, ScrollView } from 'react-native';
-import { usePatientDatabase, Patient } from '@/database/usePatientDatabase';
+import React, { useState, useEffect } from 'react';
+import { Modal, View, Text, TextInput, Pressable, ScrollView } from 'react-native';
+import { usePatientDatabase } from '@/database/usePatientDatabase';
 import { styles } from './_layout';
 
 type AddPatientModalProps = {
@@ -21,8 +21,22 @@ export default function AddPatientModal({
     const [maritalStatus, setMaritalStatus] = useState('');
     const [address, setAddress] = useState('');
     const [observations, setObservations] = useState('');
+    const [errorMessage, setErrorMessage] = useState('');
+
+    const isFormValid = name.trim() !== '' && age.trim() !== '' && !isNaN(parseInt(age, 10));
+
+    useEffect(() => {
+        if (visible) {
+            clearForm();
+        }
+    }, [visible]);
 
     const handleSubmit = async () => {
+        if (!isFormValid) {
+            setErrorMessage('Preencha corretamente os campos obrigatórios: Nome e Idade.');
+            return;
+        }
+
         try {
             const newPatientId = await create({
                 name,
@@ -40,6 +54,7 @@ export default function AddPatientModal({
             onClose();
         } catch (error) {
             console.error('Erro ao adicionar paciente:', error);
+            setErrorMessage('Erro ao adicionar paciente. Tente novamente.');
         }
     };
 
@@ -49,6 +64,7 @@ export default function AddPatientModal({
         setMaritalStatus('');
         setAddress('');
         setObservations('');
+        setErrorMessage('');
     };
 
     return (
@@ -57,18 +73,28 @@ export default function AddPatientModal({
                 <View style={styles.container}>
                     <Text style={styles.title}>Novo Paciente</Text>
 
+                    {errorMessage ? (
+                        <Text style={{ color: 'red', marginBottom: 10 }}>{errorMessage}</Text>
+                    ) : null}
+
                     <ScrollView>
                         <TextInput
                             placeholder="Nome"
                             value={name}
-                            onChangeText={setName}
+                            onChangeText={(text) => {
+                                setName(text);
+                                setErrorMessage('');
+                            }}
                             style={styles.input}
                         />
                         <TextInput
                             placeholder="Idade"
                             keyboardType="numeric"
                             value={age}
-                            onChangeText={setAge}
+                            onChangeText={(text) => {
+                                setAge(text);
+                                setErrorMessage('');
+                            }}
                             style={styles.input}
                         />
                         <TextInput
@@ -95,7 +121,11 @@ export default function AddPatientModal({
                             <Pressable style={styles.cancelButton} onPress={onClose}>
                                 <Text style={styles.buttonText}>Cancelar</Text>
                             </Pressable>
-                            <Pressable style={styles.saveButton} onPress={handleSubmit}>
+                            <Pressable
+                                style={[styles.saveButton, { opacity: isFormValid ? 1 : 0.5 }]}
+                                onPress={handleSubmit}
+                                disabled={!isFormValid}
+                            >
                                 <Text style={styles.buttonText}>Salvar</Text>
                             </Pressable>
                         </View>

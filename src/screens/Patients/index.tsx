@@ -51,6 +51,7 @@ export default function Patients() {
                 style={styles.searchInput}
             />
 
+            <Text style={styles.sectionTitle}>Pacientes</Text>
             <FlatList
                 data={patients}
                 keyExtractor={(item) => item.id.toString()}
