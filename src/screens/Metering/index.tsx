@@ -6,7 +6,7 @@ import React from 'react';
 import { styles } from './_layout';
 import SkiaLineChart from '@/components/SkiaLineChart/SkiaLineChart';
 import { MaterialIcons, Feather, FontAwesome6 } from '@expo/vector-icons';
-import SaveMeteringModal from '@/components/SaveMeteringModal/SaveMeteringModal';
+import MeteringModal from '@/components/MeteringModal/MeteringModal';
 import { Patient, usePatientDatabase } from '@/database/usePatientDatabase';
 import { useMeteringDatabase } from '@/database/useMeteringDatabase';
 
@@ -117,10 +117,10 @@ export default function Metering() {
                 </Pressable>
             </View>
 
-            <SaveMeteringModal
+            <MeteringModal
                 visible={saveModalVisible}
                 onClose={() => setSaveModalVisible(false)}
-                onSave={async ({ patientId, tag }) => {
+                onSave={async ({ patientId, tag, observations }) => {
                     if (!recordingUri) return;
 
                     try {
@@ -128,7 +128,8 @@ export default function Metering() {
                             patient_id: patientId,
                             date: new Date().toISOString(),
                             data: JSON.stringify(currentMeteringData.map((value) => value * -1)),
-                            tag: tag ?? 'blue', // fallback
+                            tag: tag ?? 'blue',
+                            observations: observations ?? '',
                         });
 
                         console.log('Gravação salva com sucesso!');
@@ -139,11 +140,11 @@ export default function Metering() {
                         console.error('Erro ao salvar metering:', error);
                     }
                 }}
-                onDelete={() => {
-                    setRecordingUri(null);
-                    setCurrentMeteringData([0]);
-                    setSaveModalVisible(false);
-                }}
+                // onDelete={() => {
+                //     setRecordingUri(null);
+                //     setCurrentMeteringData([0]);
+                //     setSaveModalVisible(false);
+                // }}
                 graphData={currentMeteringData.map((value) => value * -1)}
             />
         </View>

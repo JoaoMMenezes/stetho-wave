@@ -12,7 +12,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { styles } from './_layout';
 import { usePatientDatabase } from '@/database/usePatientDatabase';
 import { Metering, useMeteringDatabase } from '@/database/useMeteringDatabase';
-import SaveMeteringModal from '../SaveMeteringModal/SaveMeteringModal';
+import MeteringModal from '../MeteringModal/MeteringModal';
 
 interface PatientProfileModalProps {
     patientId: number;
@@ -31,7 +31,7 @@ export default function PatientProfileModal({
 }: PatientProfileModalProps) {
     const [isEditing, setIsEditing] = useState(false);
     const { get, update } = usePatientDatabase();
-    const { searchByPatientId } = useMeteringDatabase();
+    const { searchByPatientId, update: updateMetering } = useMeteringDatabase();
 
     const [name, setName] = useState('');
     const [age, setAge] = useState('');
@@ -90,6 +90,27 @@ export default function PatientProfileModal({
         )
             .toString()
             .padStart(2, '0')}/${date.getFullYear()}`;
+    }
+
+    function handleSaveMetering(metering: Metering) {
+        updateMetering(metering.id, {
+            ...metering,
+            observations,
+        });
+        setSaveModalVisible(false);
+    }
+
+    function getTagIcon(tag: string) {
+        switch (tag) {
+            case 'red':
+                return <MaterialIcons name="dangerous" size={18} color="white" />;
+            case 'green':
+                return <MaterialIcons name="check-circle" size={18} color="white" />;
+            case 'yellow':
+                return <MaterialIcons name="error" size={18} color="white" />;
+            default:
+                return <MaterialIcons name="help" size={18} color="white" />;
+        }
     }
 
     return (
@@ -193,6 +214,7 @@ export default function PatientProfileModal({
                                     key={m.id}
                                     style={styles.meteringItem}
                                     onPress={() => {
+                                        console.log('Selected metering:', m);
                                         setSelectedMetering(m);
                                         setSaveModalVisible(true);
                                     }}
@@ -200,24 +222,37 @@ export default function PatientProfileModal({
                                     <Text style={styles.noDataText}>
                                         {formatDate(new Date(m.date))}
                                     </Text>
-                                    <View
-                                        style={[
-                                            styles.tag,
-                                            { backgroundColor: m.tag, opacity: 0.6 },
-                                        ]}
-                                    />
+                                    <View style={[styles.tag, { backgroundColor: m.tag }]}>
+                                        {getTagIcon(m.tag)}
+                                    </View>
                                 </Pressable>
                             ))
                         )}
 
-                        <SaveMeteringModal
+                        <MeteringModal
                             visible={saveModalVisible}
-                            onClose={() => {
+                            onClose={async () => {
                                 setSaveModalVisible(false);
                                 setSelectedMetering(undefined);
+
+                                const meteringData = await searchByPatientId(patientId);
+                                setMeterings(meteringData);
                             }}
-                            onSave={() => {}}
-                            onDelete={() => {}}
+                            onSave={async (metering) => {
+                                try {
+                                    if (selectedMetering && selectedMetering.id !== undefined) {
+                                        await updateMetering(selectedMetering.id, {
+                                            ...selectedMetering,
+                                            observations: metering.observations,
+                                            tag: metering.tag,
+                                        });
+                                        console.log('Gravação atualizada com sucesso!');
+                                    }
+                                } catch (error) {
+                                    console.error('Erro ao salvar metering:', error);
+                                }
+                            }}
+                            isEditing={false}
                             patientId={patientId}
                             initialData={selectedMetering}
                         />

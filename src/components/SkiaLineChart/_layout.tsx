@@ -12,11 +12,10 @@ export const styles = StyleSheet.create({
         paddingHorizontal: 16,
     },
     fullscreenHeader: {
-        zIndex: 1,
+        zIndex: 10,
         position: 'absolute',
         top: 0,
         right: 0,
-        // margin: 10,
     },
     canvas: {
         width: '100%',

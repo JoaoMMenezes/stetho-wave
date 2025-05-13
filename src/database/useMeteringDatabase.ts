@@ -40,7 +40,7 @@ export function useMeteringDatabase() {
                 patient_id = $patient_id,
                 date = $date,
                 data = $data,
-                tag = $tag
+                tag = $tag,
                 observations = $observations
             WHERE id = $id
         `);

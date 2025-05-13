@@ -1,3 +1,4 @@
+import { defaultTheme } from '@/themes/default';
 import { StyleSheet } from 'react-native';
 
 export const styles = StyleSheet.create({
@@ -12,34 +13,21 @@ export const styles = StyleSheet.create({
         backgroundColor: '#a5d8ff',
         padding: 30,
     },
-    dropdownContainer: {
-        marginVertical: 10,
-        borderWidth: 1,
-        borderColor: '#ccc',
-        borderRadius: 8,
-        overflow: 'hidden',
-    },
-    picker: {
-        height: 50,
-        width: '100%',
-    },
-
-    patientName: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        marginBottom: 12,
-        backgroundColor: '#e0f0ff',
-        padding: 10,
-        borderRadius: 10,
+    closeButton: {
+        position: 'absolute',
+        top: 10,
+        right: 10,
+        zIndex: 10,
     },
     chartContainer: {
         width: '100%',
         height: '45%',
         padding: 10,
-        borderBlockColor: 'black',
+        borderColor: defaultTheme.colors.primary,
         borderWidth: 2,
         borderRadius: 28,
         backgroundColor: 'white',
+        zIndex: 1,
     },
     audioProgress: {
         flexDirection: 'row',
@@ -49,24 +37,53 @@ export const styles = StyleSheet.create({
     progressBar: {
         flex: 1,
         height: 4,
-        backgroundColor: '#ccc',
+        backgroundColor: 'white',
         borderRadius: 2,
         marginLeft: 8,
+    },
+    graphHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-end',
+        width: '100%',
+        marginVertical: 10,
+    },
+    dropDownPicker: {
+        borderColor: defaultTheme.colors.primary,
+        borderWidth: 2,
+    },
+    tagButtonGroup: {
+        flexDirection: 'row',
+        borderColor: defaultTheme.colors.primary,
+        borderWidth: 2,
+        padding: 4,
+        borderRadius: 30,
+        gap: 8,
+        width: 156,
+    },
+    tagButton: {
+        width: 30,
+        height: 30,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderRadius: 30,
     },
     observationHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'center',
+        alignItems: 'flex-end',
         marginTop: 10,
     },
-    label: {
-        fontSize: 28,
+    sectionTitle: {
+        fontSize: 18,
         fontWeight: 'bold',
-        color: '#fff',
+        color: 'white',
+        marginTop: 10,
     },
     textArea: {
-        backgroundColor: '#228be6',
-        color: '#fff',
+        backgroundColor: defaultTheme.colors.surface,
+        borderColor: defaultTheme.colors.primary,
+        borderWidth: 2,
         borderRadius: 10,
         padding: 10,
         minHeight: 80,
@@ -83,11 +100,11 @@ export const styles = StyleSheet.create({
         marginTop: 20,
     },
     saveButton: {
-        backgroundColor: '#007AFF',
+        backgroundColor: defaultTheme.colors.primary,
         paddingVertical: 10,
         paddingHorizontal: 20,
         borderRadius: 10,
-        width: '40%',
+        width: '50%',
         alignItems: 'center',
     },
     deleteButton: {

@@ -154,10 +154,11 @@ export const styles = StyleSheet.create({
     },
 
     tag: {
-        borderRadius: 20,
         width: 20,
         height: 20,
-        borderWidth: 2,
-        borderColor: '#228be6',
+        justifyContent: 'center',
+        alignContent: 'center',
+        alignItems: 'center',
+        borderRadius: 30,
     },
 });
