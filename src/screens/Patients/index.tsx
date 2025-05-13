@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, FlatList, Pressable, StyleSheet } from 'react-native';
+import { View, Text, TextInput, FlatList, Pressable, StyleSheet, Alert } from 'react-native';
 import { usePatientDatabase, Patient } from '@/database/usePatientDatabase';
 import AddPatientModal from '@/components/AddPatientModal/AddPatientModal';
 import { styles } from './_layout';
 import PatientProfileModal from '@/components/PatientProfileModal/PatientProfileModal';
 
 export default function Patients() {
-    const { getAll, searchByName } = usePatientDatabase();
+    const { getAll, searchByName, remove } = usePatientDatabase();
 
     const [patients, setPatients] = useState<Patient[]>([]);
     const [searchText, setSearchText] = useState('');
@@ -27,6 +27,30 @@ export default function Patients() {
         }
     }
 
+    async function handleDeletePatient(id: number) {
+        try {
+            await remove(id);
+            setPatients((prevPatients) => prevPatients.filter((patient) => patient.id !== id));
+        } catch (error) {
+            console.error('Erro ao remover paciente:', error);
+        }
+    }
+
+    function confirmDeletePatient(id: number, name: string) {
+        Alert.alert(
+            'Excluir paciente',
+            `Tem certeza que deseja excluir o paciente "${name}"? Esta ação não poderá ser desfeita.`,
+            [
+                { text: 'Cancelar', style: 'cancel' },
+                {
+                    text: 'Excluir',
+                    style: 'destructive',
+                    onPress: () => handleDeletePatient(id),
+                },
+            ]
+        );
+    }
+
     useEffect(() => {
         fetchPatients();
     }, []);
@@ -34,7 +58,7 @@ export default function Patients() {
     useEffect(() => {
         const timeout = setTimeout(() => {
             fetchPatients(searchText);
-        }, 300); // debounce leve
+        }, 300);
         return () => clearTimeout(timeout);
     }, [searchText]);
 
@@ -56,7 +80,11 @@ export default function Patients() {
                 data={patients}
                 keyExtractor={(item) => item.id.toString()}
                 renderItem={({ item }) => (
-                    <Pressable style={styles.patientItem} onPress={() => setSelectedPatient(item)}>
+                    <Pressable
+                        style={styles.patientItem}
+                        onLongPress={() => confirmDeletePatient(item.id, item.name)}
+                        onPress={() => setSelectedPatient(item)}
+                    >
                         <Text style={styles.patientName}>{item.name}</Text>
                     </Pressable>
                 )}
@@ -69,12 +97,11 @@ export default function Patients() {
                 visible={modalVisible}
                 onClose={() => {
                     setModalVisible(false);
-                    fetchPatients(); // Atualiza lista após cadastro
+                    fetchPatients();
                 }}
                 onPatientAdded={() => fetchPatients()}
             />
 
-            {/* Abrir patient profile modal */}
             <PatientProfileModal
                 visible={!!selectedPatient}
                 onClose={() => setSelectedPatient(null)}
