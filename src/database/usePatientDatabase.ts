@@ -4,7 +4,7 @@ export type Patient = {
     id: number;
     name: string;
     age: number;
-    maritalStatus: string;
+    marital_status: string;
     address: string;
     observations: string;
 };
@@ -15,14 +15,14 @@ export function usePatientDatabase() {
     async function create(data: Omit<Patient, 'id'>) {
         const statement = await database.prepareAsync(`
             INSERT INTO patient (name, age, marital_status, address, observations)
-            VALUES ($name, $age, $maritalStatus, $address, $observations)
+            VALUES ($name, $age, $marital_status, $address, $observations)
         `);
 
         try {
             const result = await statement.executeAsync({
                 $name: data.name,
                 $age: data.age,
-                $maritalStatus: data.maritalStatus,
+                $marital_status: data.marital_status,
                 $address: data.address,
                 $observations: data.observations,
             });
@@ -38,7 +38,7 @@ export function usePatientDatabase() {
             UPDATE patient
             SET name = $name,
                 age = $age,
-                marital_status = $maritalStatus,
+                marital_status = $marital_status,
                 address = $address,
                 observations = $observations
             WHERE id = $id
@@ -49,7 +49,7 @@ export function usePatientDatabase() {
                 $id: id,
                 $name: data.name,
                 $age: data.age,
-                $maritalStatus: data.maritalStatus,
+                $marital_status: data.marital_status,
                 $address: data.address,
                 $observations: data.observations,
             });

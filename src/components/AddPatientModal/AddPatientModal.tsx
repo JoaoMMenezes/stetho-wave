@@ -18,7 +18,7 @@ export default function AddPatientModal({
 
     const [name, setName] = useState('');
     const [age, setAge] = useState('');
-    const [maritalStatus, setMaritalStatus] = useState('');
+    const [marital_status, setMaritalStatus] = useState('');
     const [address, setAddress] = useState('');
     const [observations, setObservations] = useState('');
     const [errorMessage, setErrorMessage] = useState('');
@@ -41,7 +41,7 @@ export default function AddPatientModal({
             const newPatientId = await create({
                 name,
                 age: parseInt(age, 10),
-                maritalStatus,
+                marital_status,
                 address,
                 observations,
             });
@@ -99,7 +99,7 @@ export default function AddPatientModal({
                         />
                         <TextInput
                             placeholder="Estado Civil"
-                            value={maritalStatus}
+                            value={marital_status}
                             onChangeText={setMaritalStatus}
                             style={styles.input}
                         />

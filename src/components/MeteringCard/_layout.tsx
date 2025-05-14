@@ -1,27 +1,37 @@
+import { defaultTheme } from '@/themes/default';
 import { StyleSheet } from 'react-native';
 
 export const styles = StyleSheet.create({
-    card: {
-        backgroundColor: '#fff',
-        borderRadius: 10,
-        padding: 10,
-        marginVertical: 8,
-        marginHorizontal: 16,
-        shadowColor: '#000',
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 2,
-    },
-    header: {
-        borderBottomWidth: 1,
-        borderBottomColor: '#eee',
-        paddingBottom: 6,
+    meteringItem: {
+        padding: 12,
+        backgroundColor: 'white',
+        borderRadius: 6,
         marginBottom: 8,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        shadowColor: 'black',
+        shadowOffset: {
+            width: 0,
+            height: 1,
+        },
+        shadowOpacity: 0.2,
+        elevation: 1,
     },
-    patientName: { fontSize: 16, fontWeight: 'bold', color: '#333' },
-    body: { marginBottom: 8 },
-    date: { fontSize: 14, color: '#555' },
-    footer: {
-        alignItems: 'flex-end',
+    dataText: {
+        fontSize: 16,
+        color: 'gray',
+    },
+    nameText: {
+        fontSize: 16,
+        fontWeight: 500,
+    },
+    tag: {
+        width: 20,
+        height: 20,
+        justifyContent: 'center',
+        alignContent: 'center',
+        alignItems: 'center',
+        borderRadius: 30,
     },
 });

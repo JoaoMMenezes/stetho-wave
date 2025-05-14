@@ -13,6 +13,7 @@ import { styles } from './_layout';
 import { usePatientDatabase } from '@/database/usePatientDatabase';
 import { Metering, useMeteringDatabase } from '@/database/useMeteringDatabase';
 import MeteringModal from '../MeteringModal/MeteringModal';
+import MeteringCard from '../MeteringCard/MeteringCard';
 
 interface PatientProfileModalProps {
     patientId: number;
@@ -35,7 +36,7 @@ export default function PatientProfileModal({
 
     const [name, setName] = useState('');
     const [age, setAge] = useState('');
-    const [maritalStatus, setMaritalStatus] = useState('');
+    const [marital_status, setMaritalStatus] = useState('');
     const [address, setAddress] = useState('');
     const [observations, setObservations] = useState('');
     const [meterings, setMeterings] = useState([] as Metering[]);
@@ -51,7 +52,7 @@ export default function PatientProfileModal({
                     if (patient) {
                         setName(patient.name);
                         setAge(patient.age.toString());
-                        setMaritalStatus(patient.maritalStatus || '');
+                        setMaritalStatus(patient.marital_status || '');
                         setAddress(patient.address || '');
                         setObservations(patient.observations || '');
                     }
@@ -71,7 +72,7 @@ export default function PatientProfileModal({
             await update(patientId, {
                 name,
                 age: parseInt(age),
-                maritalStatus,
+                marital_status,
                 address,
                 observations,
             });
@@ -98,19 +99,6 @@ export default function PatientProfileModal({
             observations,
         });
         setSaveModalVisible(false);
-    }
-
-    function getTagIcon(tag: string) {
-        switch (tag) {
-            case 'red':
-                return <MaterialIcons name="dangerous" size={18} color="white" />;
-            case 'green':
-                return <MaterialIcons name="check-circle" size={18} color="white" />;
-            case 'yellow':
-                return <MaterialIcons name="error" size={18} color="white" />;
-            default:
-                return <MaterialIcons name="help" size={18} color="white" />;
-        }
     }
 
     return (
@@ -181,7 +169,7 @@ export default function PatientProfileModal({
                         />
                         <TextInput
                             placeholder="Estado Civil"
-                            value={maritalStatus}
+                            value={marital_status}
                             onChangeText={setMaritalStatus}
                             editable={isEditing}
                             style={styles.input}
@@ -210,22 +198,29 @@ export default function PatientProfileModal({
                             <Text style={styles.noDataText}>Nenhuma gravação encontrada.</Text>
                         ) : (
                             meterings.map((m) => (
-                                <Pressable
+                                <MeteringCard
                                     key={m.id}
-                                    style={styles.meteringItem}
+                                    metering={m}
                                     onPress={() => {
-                                        console.log('Selected metering:', m);
                                         setSelectedMetering(m);
                                         setSaveModalVisible(true);
                                     }}
-                                >
-                                    <Text style={styles.noDataText}>
-                                        {formatDate(new Date(m.date))}
-                                    </Text>
-                                    <View style={[styles.tag, { backgroundColor: m.tag }]}>
-                                        {getTagIcon(m.tag)}
-                                    </View>
-                                </Pressable>
+                                />
+                                // <Pressable
+                                //     key={m.id}
+                                //     style={styles.meteringItem}
+                                //     onPress={() => {
+                                //         setSelectedMetering(m);
+                                //         setSaveModalVisible(true);
+                                //     }}
+                                // >
+                                //     <Text style={styles.noDataText}>
+                                //         {formatDate(new Date(m.date))}
+                                //     </Text>
+                                //     <View style={[styles.tag, { backgroundColor: m.tag }]}>
+                                //         {getTagIcon(m.tag)}
+                                //     </View>
+                                // </Pressable>
                             ))
                         )}
 

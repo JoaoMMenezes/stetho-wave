@@ -1,37 +1,72 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
+import React, { useEffect, useState } from 'react';
+import { Pressable, StyleProp, Text, View } from 'react-native';
+import { Feather, MaterialIcons } from '@expo/vector-icons';
+import { Metering } from '@/database/useMeteringDatabase';
 import { styles } from './_layout';
+import { usePatientDatabase } from '@/database/usePatientDatabase';
 
-interface MeteringCardProps {
-    patientName: string;
-    date: string;
-    status: 'danger' | 'inconclusive' | 'resolved';
-}
+type MeteringCardProps = {
+    metering: Metering;
+    onPress: () => void;
+    customStyles?: StyleProp<any>;
+    showPatientName?: boolean;
+};
 
-export default function MeteringCard({ patientName, date, status }: MeteringCardProps) {
-    const getStatusIcon = () => {
-        switch (status) {
-            case 'danger':
-                return <MaterialIcons name="error" size={24} color="red" />;
-            case 'inconclusive':
-                return <MaterialIcons name="help" size={24} color="blue" />;
-            case 'resolved':
-                return <MaterialIcons name="check-circle" size={24} color="green" />;
+export default function MeteringCard({
+    metering,
+    onPress,
+    customStyles,
+    showPatientName,
+}: MeteringCardProps) {
+    const { get } = usePatientDatabase();
+    const [patientName, setPatientName] = useState<string>('Desconhecido');
+
+    useEffect(() => {
+        const fetchPatientName = async () => {
+            setPatientName(await getPatientName());
+        };
+        fetchPatientName();
+    }, [metering.patient_id]);
+
+    function formatDate(date: Date) {
+        return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1)
+            .toString()
+            .padStart(2, '0')}/${date.getFullYear()}  -  ${date
+            .getHours()
+            .toString()
+            .padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+    }
+
+    function mapTagIcon(tag: string) {
+        switch (tag) {
+            case 'red':
+                return <MaterialIcons name="error" size={18} color="white" />;
+            case 'green':
+                return <MaterialIcons name="check-circle" size={18} color="white" />;
+
             default:
-                return null;
+                return <MaterialIcons name="help" size={18} color="white" />;
         }
-    };
+    }
+
+    async function getPatientName() {
+        if (metering.patient_id) {
+            const patient = await get(metering.patient_id);
+            return patient?.name || 'Desconhecido';
+        }
+        return 'Desconhecido';
+    }
 
     return (
-        <View style={styles.card}>
-            <View style={styles.header}>
-                <Text style={styles.patientName}>{patientName}</Text>
+        <Pressable style={[styles.meteringItem, customStyles]} onPress={() => onPress()}>
+            {showPatientName ? (
+                <Text style={styles.nameText}>{patientName}</Text>
+            ) : (
+                <Text style={styles.dataText}>{formatDate(new Date(metering.date))}</Text>
+            )}
+            <View style={[styles.tag, { backgroundColor: metering.tag }]}>
+                {mapTagIcon(metering.tag)}
             </View>
-            <View style={styles.body}>
-                <Text style={styles.date}>Data: {date}</Text>
-            </View>
-            <View style={styles.footer}>{getStatusIcon()}</View>
-        </View>
+        </Pressable>
     );
 }

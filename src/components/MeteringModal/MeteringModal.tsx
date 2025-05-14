@@ -25,7 +25,7 @@ interface MeteringModalProps {
     onSave: (data: {
         patientId: number;
         observations: string;
-        tag: 'red' | 'yellow' | 'green' | 'blue';
+        tag: 'red' | 'green' | 'blue';
     }) => void;
     graphData?: number[];
     initialData?: Metering;
@@ -49,17 +49,12 @@ export default function MeteringModal({
     const [openPatientDropdown, setOpenPatientDropdown] = useState(false);
     const [patientItems, setPatientItems] = useState<{ label: string; value: number }[]>([]);
 
-    const [selectedTag, setSelectedTag] = useState<'red' | 'yellow' | 'green' | 'blue'>('blue');
+    const [selectedTag, setSelectedTag] = useState<'red' | 'green' | 'blue'>('blue');
     const [isEditingInternal, setIsEditingInternal] = useState(isEditing);
 
     const screenDimensions = Dimensions.get('window');
 
-    const tagItems = [
-        { label: 'Vermelho', value: 'red' },
-        { label: 'Amarelo', value: 'yellow' },
-        { label: 'Verde', value: 'green' },
-        { label: 'Azul', value: 'blue' },
-    ];
+    const tags = ['red', 'green', 'blue'];
 
     useEffect(() => {
         async function fetchPatients() {
@@ -105,11 +100,9 @@ export default function MeteringModal({
     function getTagIcon(tag: string) {
         switch (tag) {
             case 'red':
-                return <MaterialIcons name="dangerous" size={24} color="white" />;
+                return <MaterialIcons name="error" size={24} color="white" />;
             case 'green':
                 return <MaterialIcons name="check-circle" size={24} color="white" />;
-            case 'yellow':
-                return <MaterialIcons name="error" size={24} color="white" />;
             default:
                 return <MaterialIcons name="help" size={24} color="white" />;
         }
@@ -153,11 +146,6 @@ export default function MeteringModal({
                     {/* Observações */}
                     <View style={styles.observationHeader}>
                         <Text style={styles.sectionTitle}>Observações</Text>
-                        {!isEditingInternal && (
-                            <TouchableOpacity onPress={() => setIsEditingInternal(true)}>
-                                <MaterialIcons name="edit" size={20} color="#007AFF" />
-                            </TouchableOpacity>
-                        )}
                     </View>
 
                     <TextInput
@@ -180,7 +168,7 @@ export default function MeteringModal({
                                         !isEditingInternal && styles.disabledInput,
                                     ]}
                                 >
-                                    {tagItems.map(({ value }) => (
+                                    {tags.map((value) => (
                                         <Pressable
                                             key={value}
                                             onPress={() =>

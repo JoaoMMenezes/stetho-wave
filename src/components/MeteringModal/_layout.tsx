@@ -59,7 +59,6 @@ export const styles = StyleSheet.create({
         padding: 4,
         borderRadius: 30,
         gap: 8,
-        width: 156,
     },
     tagButton: {
         width: 30,

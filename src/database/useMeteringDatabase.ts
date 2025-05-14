@@ -5,7 +5,7 @@ export type Metering = {
     patient_id: number;
     date: string;
     data: string;
-    tag: 'red' | 'yellow' | 'green' | 'blue';
+    tag: 'red' | 'green' | 'blue';
     observations?: string;
 };
 
@@ -86,7 +86,7 @@ export function useMeteringDatabase() {
             );
             return result.map((row) => ({
                 ...row,
-                data: JSON.parse(row.data), // desserializa aqui
+                data: JSON.parse(row.data),
             }));
         } catch (error) {
             throw error;
