@@ -34,6 +34,7 @@
         <category android:name="android.intent.category.BROWSABLE"/>
         <data android:scheme="myapp"/>
         <data android:scheme="com.joaop.mm.stethowave"/>
+        <data android:scheme="exp+stetho-wave"/>
       </intent-filter>
     </activity>
   </application>

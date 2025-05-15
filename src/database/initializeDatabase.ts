@@ -2,7 +2,7 @@ import { type SQLiteDatabase } from 'expo-sqlite';
 import { dummyPatients, dummyMeterings } from './dummyData';
 
 export async function initializeDatabase(database: SQLiteDatabase) {
-    const testingFlag = false;
+    const testingFlag = true;
 
     if (testingFlag) {
         await database.execAsync(`DROP TABLE IF EXISTS metering;`);
