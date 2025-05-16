@@ -11,10 +11,10 @@ import {
     ActivityIndicator,
 } from 'react-native';
 import { BleManager, Device } from 'react-native-ble-plx';
-import { Base64 } from 'js-base64';
 import { styles } from './_layout';
 import { MaterialIcons } from '@expo/vector-icons';
 import { defaultTheme } from '@/themes/default';
+import { Buffer } from 'buffer';
 
 interface SettingsModalProps {
     visible: boolean;
@@ -25,7 +25,7 @@ interface SettingsModalProps {
 }
 
 const SERVICE_UUID = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';
-const BOX_CHARACTERISTIC_UUID = 'beb5483e-36e1-4688-b7f5-ea07361b26a8';
+const AUDIO_CHAR_UUID = 'beb5483e-36e1-4688-b7f5-ea07361b26a8';
 
 const bleManager = new BleManager();
 
@@ -38,20 +38,15 @@ export default function SettingsModal({
 }: SettingsModalProps) {
     const [connectedDevice, setConnectedDevice] = useState<Device | null>(null);
     const [isConnected, setIsConnected] = useState(false);
-    const [boxValue, setBoxValue] = useState(0);
     const [isLoading, setIsLoading] = useState(false);
     const [isScanning, setIsScanning] = useState(false);
 
     useEffect(() => {
         return () => {
-            bleManager.destroy(); // limpa recursos ao desmontar
+            bleManager.destroy();
         };
     }, []);
 
-    /**
-     * Solicita permissões necessárias para BLE no Android
-     * @returns true se as permissões foram concedidas, false caso contrário
-     */
     async function requestPermissions() {
         if (Platform.OS === 'android') {
             const granted = await PermissionsAndroid.requestMultiple([
@@ -64,114 +59,55 @@ export default function SettingsModal({
         return true;
     }
 
-    /**
-     * Conecta ao dispositivo BLE e inicia o monitoramento do valor recebido
-     */
     async function connectToDevice() {
-        console.log('Conectando ao dispositivo...');
-        if (isConnected || isScanning) {
-            console.warn('Já conectado ou escaneando');
-            return;
-        }
-
-        const permission = await requestPermissions();
-        if (!permission) return;
-
-        console.log('Permissões concedidas');
+        if (isConnected || isScanning) return;
+        const ok = await requestPermissions();
+        if (!ok) return;
 
         setIsScanning(true);
         setIsLoading(true);
 
         bleManager.startDeviceScan(null, null, async (error, device) => {
-            console.log('Escaneando dispositivos...');
-
+            console.log('Checking device', device?.name, device?.id);
             if (error) {
-                console.warn('Erro ao escanear:', error);
-                bleManager.stopDeviceScan();
-                setIsScanning(false);
-                setIsLoading(false);
+                console.warn('BLE scan error:', error);
+                stopScan();
                 return;
             }
-
-            console.log('Dispositivo encontrado:', device?.name, device?.id);
-
-            if (device?.name === 'ESP32_Box') {
-                bleManager.stopDeviceScan();
-                setIsScanning(false);
+            if (device?.name && device.name.includes('ESP32_Audio_SPIFFS')) {
+                console.log('Found device:', device.name);
+                stopScan();
                 try {
-                    const alreadyConnected = await bleManager.isDeviceConnected(device.id);
-                    const connected = alreadyConnected ? device : await device.connect();
-
-                    const connectAlready = await bleManager.isDeviceConnected(device.id);
-                    console.log('connectAlready?', connectAlready);
-
+                    const connected = await device.connect();
                     await connected.discoverAllServicesAndCharacteristics();
                     setConnectedDevice(connected);
                     setIsConnected(true);
-                    onConnect(device, BOX_CHARACTERISTIC_UUID);
-
-                    // leitura inicial
-                    const char = await connected.readCharacteristicForService(
-                        SERVICE_UUID,
-                        BOX_CHARACTERISTIC_UUID
-                    );
-                    const value = parseInt(Base64.decode(char?.value || '0'));
-                    setBoxValue(value);
-
-                    // monitoramento
-                    connected.monitorCharacteristicForService(
-                        SERVICE_UUID,
-                        BOX_CHARACTERISTIC_UUID,
-                        (error, characteristic) => {
-                            if (error) {
-                                console.warn('Erro no monitoramento:', error);
-                                return;
-                            }
-                            if (characteristic?.value) {
-                                const updatedValue = parseInt(Base64.decode(characteristic.value));
-                                setBoxValue(updatedValue);
-                                console.log('Valor atualizado:', updatedValue);
-                            }
-                        },
-                        'monitor-box'
-                    );
-                } catch (err) {
-                    console.error('Erro na conexão:', err);
+                    onConnect(connected, AUDIO_CHAR_UUID);
+                } catch (e) {
+                    console.error('Connection error:', e);
+                } finally {
+                    setIsLoading(false);
                 }
-                setIsLoading(false);
             }
         });
 
-        // timeout
-        setTimeout(() => {
-            bleManager.stopDeviceScan();
-            setIsScanning(false);
-            setIsLoading(false);
-        }, 30000);
+        // stop scan after timeout
+        setTimeout(stopScan, 100000);
+    }
+
+    function stopScan() {
+        bleManager.stopDeviceScan();
+        setIsScanning(false);
+        setIsLoading(false);
     }
 
     async function disconnectFromDevice() {
-        if (connectedDevice) {
-            await bleManager.cancelTransaction('monitor-box');
-            await bleManager.cancelDeviceConnection(connectedDevice.id);
-            setConnectedDevice(null);
-            setIsConnected(false);
-        }
-    }
-
-    async function toggleBoxValue() {
         if (!connectedDevice) return;
-
-        const newValue = boxValue === 0 ? 1 : 0;
-
-        await bleManager.writeCharacteristicWithResponseForDevice(
-            connectedDevice.id,
-            SERVICE_UUID,
-            BOX_CHARACTERISTIC_UUID,
-            Base64.encode(newValue.toString())
-        );
-
-        setBoxValue(newValue);
+        try {
+            await bleManager.cancelDeviceConnection(connectedDevice.id);
+        } catch {}
+        setConnectedDevice(null);
+        setIsConnected(false);
     }
 
     return (
@@ -209,30 +145,10 @@ export default function SettingsModal({
                     ) : isConnected ? (
                         <View style={styles.connectedInfo}>
                             <Text>Dispositivo conectado</Text>
-                            <Text>Valor atual: {boxValue}</Text>
-                            <View
-                                style={{
-                                    flexDirection: 'row',
-                                    alignItems: 'center',
-                                    marginTop: 10,
-                                }}
-                            >
-                                <Text>Alternar valor:</Text>
-                                <Switch
-                                    value={boxValue === 1}
-                                    onValueChange={toggleBoxValue}
-                                    style={{ marginLeft: 10 }}
-                                />
-                            </View>
                             <Button title="Desconectar" onPress={disconnectFromDevice} />
                         </View>
                     ) : (
-                        <Button
-                            title="Conectar ao ESP32"
-                            onPress={() => {
-                                connectToDevice();
-                            }}
-                        />
+                        <Button title="Conectar ao ESP32" onPress={connectToDevice} />
                     )}
                 </View>
             </View>

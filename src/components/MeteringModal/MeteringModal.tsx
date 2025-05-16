@@ -18,6 +18,9 @@ import DropDownPicker from 'react-native-dropdown-picker';
 import { usePatientDatabase, Patient } from '@/database/usePatientDatabase';
 import { Metering } from '@/database/useMeteringDatabase';
 import { defaultTheme } from '@/themes/default';
+import { convertFictitiousDataToInt16, playWavFromSamples } from './audioUtils';
+import { Audio } from 'expo-av';
+const exampleWav = require('@/../assets/audio/m98.wav'); // ajuste o caminho conforme necessário
 
 interface MeteringModalProps {
     visible: boolean;
@@ -55,6 +58,7 @@ export default function MeteringModal({
     const screenDimensions = Dimensions.get('window');
 
     const tags = ['red', 'green', 'blue'];
+    const chartDataToShow = initialData?.data ? JSON.parse(initialData?.data) : graphData;
 
     useEffect(() => {
         async function fetchPatients() {
@@ -80,7 +84,7 @@ export default function MeteringModal({
         }
     }, [visible]);
 
-    const handleSave = () => {
+    function handleSave() {
         if (!selectedPatientId) {
             alert('Selecione um paciente antes de salvar.');
             return;
@@ -93,9 +97,7 @@ export default function MeteringModal({
         });
 
         setIsEditingInternal(false);
-    };
-
-    const chartDataToShow = initialData?.data ? JSON.parse(initialData?.data) : graphData;
+    }
 
     function getTagIcon(tag: string) {
         switch (tag) {
@@ -107,6 +109,26 @@ export default function MeteringModal({
                 return <MaterialIcons name="help" size={24} color="white" />;
         }
     }
+
+    async function handlePlayAudio() {
+        if (!chartDataToShow || !Array.isArray(chartDataToShow)) return;
+
+        try {
+            const samples = convertFictitiousDataToInt16(chartDataToShow);
+            await playWavFromSamples(samples);
+        } catch (error) {
+            console.error('Erro ao reproduzir áudio:', error);
+        }
+    }
+
+    const handlePlayLocalWav = async () => {
+        try {
+            const { sound } = await Audio.Sound.createAsync(exampleWav);
+            await sound.playAsync();
+        } catch (error) {
+            console.error('Erro ao reproduzir áudio local:', error);
+        }
+    };
 
     return (
         <Modal animationType="fade" transparent visible={visible} onRequestClose={onClose}>
@@ -198,10 +220,10 @@ export default function MeteringModal({
                                 />
                             </View>
 
-                            <View style={styles.audioProgress}>
+                            <Pressable style={styles.audioProgress} onPress={handlePlayLocalWav}>
                                 <MaterialIcons name="play-arrow" size={24} color="white" />
                                 <View style={styles.progressBar} />
-                            </View>
+                            </Pressable>
                         </>
                     )}
 
