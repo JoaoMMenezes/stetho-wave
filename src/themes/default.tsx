@@ -10,6 +10,7 @@ export const defaultTheme = {
             disabled: '#bdbdbd',
             inverse: '#ffffff',
         },
+        error: 'red',
     },
     spacing: (factor: number) => `${factor * 8}px`,
     borderRadius: '4px',
