@@ -11,6 +11,7 @@ import { Patient, usePatientDatabase } from '@/database/usePatientDatabase';
 import { useMeteringDatabase } from '@/database/useMeteringDatabase';
 import SettingsModal from '@/components/SettingsModal/SettingsModal';
 import { Device } from 'react-native-ble-plx';
+import AudioBLEDebug from '@/components/TestBluetooth/AudioBLEDebug';
 
 interface RecordingData {
     uri: string;
@@ -200,9 +201,9 @@ export default function Metering() {
 
     const handleSineValueUpdate = (value: number) => {
         // Este log é crucial para ver o estado no momento da chegada dos dados
-        console.log(
-            `[Metering handleSineValueUpdate] Valor: ${value}, Fonte: ${source}, Gravando: ${isRecordingActive}`
-        );
+        // console.log(
+        //     `[Metering handleSineValueUpdate] Valor: ${value}, Fonte: ${source}, Gravando: ${isRecordingActive}`
+        // );
         if (source === 'ble') {
             setCurrentMeteringData((prevData) => {
                 const newData = [...prevData, value];
@@ -218,9 +219,7 @@ export default function Metering() {
         <View style={styles.container}>
             <View style={styles.chartContainer}>
                 <SkiaLineChart
-                    data={currentMeteringData.map(
-                        (value) => (source === 'mic' ? ((value + 160) / 160) * 200 : value) // Ajuste a normalização do MIC conforme necessário
-                    )}
+                    data={currentMeteringData}
                     fullscreenEnabled={true}
                     height={(screenDimensions.height - 50 - 30) * 0.55 - 40}
                     padding={screenDimensions.width * 0.05}

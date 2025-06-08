@@ -28,8 +28,8 @@ interface SettingsModalProps {
 
 // UUIDs do seu ESP32 (conforme o firmware da senoide)
 const SERVICE_UUID = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';
-const SINE_CHARACTERISTIC_UUID = 'beb5483e-36e1-4688-b7f5-ea07361b26a8'; // Renomeado para clareza
-const TARGET_DEVICE_NAME = 'ESP32_Senoide_Sim'; // Nome do seu dispositivo ESP32
+const CHARACTERISTIC_UUID = 'beb5483e-36e1-4688-b7f5-ea07361b26a8'; // Renomeado para clareza
+const TARGET_DEVICE_NAME = 'ESP32_Audio_BLE'; // Nome do seu dispositivo ESP32
 
 // Instância única do BleManager
 const bleManager = new BleManager();
@@ -44,7 +44,8 @@ export default function SettingsModal({
 }: SettingsModalProps) {
     const [connectedDevice, setConnectedDevice] = useState<Device | null>(null);
     const [isConnected, setIsConnected] = useState(false);
-    const [sineValue, setSineValue] = useState(0); // Estado para o valor da senoide
+    // const [sineValue, setLastSampleValue] = useState(0); // Estado para o valor da senoide
+    const [lastSampleValue, setLastSampleValue] = useState(0);
     const [isLoading, setIsLoading] = useState(false);
     const [isScanning, setIsScanning] = useState(false);
 
@@ -72,7 +73,8 @@ export default function SettingsModal({
                     console.log('Dispositivo desconectado:', device?.name);
                     setIsConnected(false);
                     setConnectedDevice(null);
-                    setSineValue(0);
+                    // setLastSampleValue(0);
+                    setLastSampleValue(0);
                     // Notificar o componente pai se necessário
                 }
             );
@@ -180,13 +182,13 @@ export default function SettingsModal({
                     try {
                         const char = await connectedDev.readCharacteristicForService(
                             SERVICE_UUID,
-                            SINE_CHARACTERISTIC_UUID
+                            CHARACTERISTIC_UUID
                         );
                         if (char?.value) {
                             const decodedValue = Base64.decode(char.value);
                             const floatVal = parseFloat(decodedValue);
                             console.log('Valor inicial lido:', floatVal);
-                            setSineValue(floatVal);
+                            setLastSampleValue(floatVal);
                             onSineValueUpdate(floatVal);
                         }
                     } catch (readError) {
@@ -195,37 +197,64 @@ export default function SettingsModal({
 
                     // Monitorar a característica para atualizações da senoide
                     console.log('Iniciando monitoramento da característica...');
-                    const subscriptionId = `monitor-${SINE_CHARACTERISTIC_UUID}`; // ID único para a transação
+                    const subscriptionId = `monitor-${CHARACTERISTIC_UUID}`; // ID único para a transação
                     connectedDev.monitorCharacteristicForService(
                         SERVICE_UUID,
-                        SINE_CHARACTERISTIC_UUID,
+                        CHARACTERISTIC_UUID, // Use o UUID correto
                         (err, characteristic) => {
                             if (err) {
                                 console.warn(
                                     'Erro no monitoramento da característica:',
-                                    err.message,
-                                    err.errorCode
+                                    err.message
                                 );
-                                // Tratar erros comuns como GATT_ERROR_CCCD_IMPROPERLY_CONFIGURED (13) ou desconexão
-                                // if (
-                                //     err.errorCode === 133 /* GATT_ERROR */ ||
-                                //     err.errorCode === 201 /* DISCONNECTED */
-                                // ) {
-                                //     // Tentar reconectar ou informar o usuário
-                                //     console.log('Dispositivo pode ter desconectado ou erro GATT.');
-                                //     disconnectFromDevice(); // Limpa o estado
-                                // }
+                                // Adicione sua lógica de tratamento de erro/desconexão aqui
                                 return;
                             }
+
+                            // 2. A MÁGICA ACONTECE AQUI
                             if (characteristic?.value) {
-                                const decodedString = Base64.decode(characteristic.value);
-                                const updatedFloatValue = parseFloat(decodedString);
-                                // console.log('Valor da senoide atualizado:', updatedFloatValue); // Log verboso
-                                setSineValue(updatedFloatValue);
-                                onSineValueUpdate(updatedFloatValue); // Atualiza no componente pai
+                                // Decodifica a string Base64 para uma string de bytes brutos
+                                const rawByteString = Base64.decode(characteristic.value);
+
+                                // Cria um buffer de bytes (Uint8Array) a partir da string
+                                const byteArray = new Uint8Array(rawByteString.length);
+                                for (let i = 0; i < rawByteString.length; i++) {
+                                    byteArray[i] = rawByteString.charCodeAt(i);
+                                }
+
+                                // Usa um DataView para ler os números de 16-bit do buffer de bytes
+                                const dataView = new DataView(byteArray.buffer);
+                                const audioSamples = [];
+
+                                // Itera sobre o buffer, lendo 2 bytes (16 bits) de cada vez
+                                try {
+                                    for (let i = 0; i < dataView.byteLength; i += 2) {
+                                        // O 'true' no final indica "little-endian", que é o formato do ESP32.
+                                        const sample = dataView.getInt16(i, true);
+                                        audioSamples.push(sample);
+                                    }
+                                } catch (e) {
+                                    // console.error('Erro ao processar os dados recebidos:', e);
+                                }
+
+                                if (audioSamples.length > 0) {
+                                    // Pega a última amostra do pacote
+                                    const latestSample = audioSamples[audioSamples.length - 1];
+
+                                    // 1. Atualiza o estado local para exibição no modal
+                                    setLastSampleValue(latestSample);
+
+                                    // 2. Chama a função do componente pai com o valor mais recente
+                                    onSineValueUpdate(latestSample);
+                                }
+
+                                // Agora você pode usar este array de amostras
+                                // Por exemplo, atualizar um estado para visualização
+                                // onAudioDataUpdate(audioSamples);
+                                // setAudioData(prevData => [...prevData, ...audioSamples]); // Para acumular dados
                             }
                         },
-                        subscriptionId // ID da transação para poder cancelar depois
+                        subscriptionId
                     );
                     console.log(`Monitoramento iniciado com ID: ${subscriptionId}`);
                 } catch (connectionError) {
@@ -265,7 +294,7 @@ export default function SettingsModal({
         if (connectedDevice) {
             try {
                 // Parar monitoramento. O ID da transação deve ser o mesmo usado em monitorCharacteristicForService
-                // await bleManager.cancelTransaction(`monitor-${SINE_CHARACTERISTIC_UUID}`);
+                // await bleManager.cancelTransaction(`monitor-${CHARACTERISTIC_UUID}`);
                 // console.log("Monitoramento cancelado."); // A biblioteca pode cancelar automaticamente na desconexão
 
                 await connectedDevice.cancelConnection(); // Mais direto com o objeto Device
@@ -276,7 +305,7 @@ export default function SettingsModal({
             } finally {
                 setConnectedDevice(null);
                 setIsConnected(false);
-                setSineValue(0);
+                setLastSampleValue(0);
                 // Não precisa mais chamar onDeviceDisconnected aqui, o listener já faz isso.
             }
         } else {
@@ -299,7 +328,7 @@ export default function SettingsModal({
         try {
             await connectedDevice.writeCharacteristicWithResponseForService(
                 SERVICE_UUID,
-                SINE_CHARACTERISTIC_UUID, // Certifique-se que esta característica permite escrita no ESP32
+                CHARACTERISTIC_UUID, // Certifique-se que esta característica permite escrita no ESP32
                 Base64.encode(command)
             );
             console.log("Comando enviado:", command);
@@ -357,7 +386,7 @@ export default function SettingsModal({
                                     marginVertical: 10,
                                 }}
                             >
-                                Valor da Senoide: {sineValue.toFixed(2)}
+                                Valor da Senoide: {lastSampleValue.toFixed(2)}
                             </Text>
                             <Button
                                 title="Desconectar do ESP32"
@@ -382,38 +411,3 @@ export default function SettingsModal({
         </Modal>
     );
 }
-
-// Exemplo de como você usaria este Modal em um componente pai:
-/*
-function App() {
-    const [modalVisible, setModalVisible] = useState(false);
-    const [dataSource, setDataSource] = useState<'mic' | 'ble'>('mic');
-    const [currentSineValue, setCurrentSineValue] = useState(0);
-
-    const handleDeviceConnected = (device: Device) => {
-        console.log("App: Dispositivo conectado - ", device.name);
-        // Faça algo quando o dispositivo conectar, se necessário
-    };
-
-    const handleSineValueUpdate = (value: number) => {
-        // console.log("App: Novo valor da senoide - ", value); // Log verboso
-        setCurrentSineValue(value);
-    };
-
-    return (
-        <View style={{flex: 1, justifyContent: 'center', alignItems: 'center'}}>
-            <Text>Fonte de Dados: {dataSource}</Text>
-            {dataSource === 'ble' && <Text>Valor da Senoide: {currentSineValue.toFixed(2)}</Text>}
-            <Button title="Abrir Configurações" onPress={() => setModalVisible(true)} />
-            <SettingsModal
-                visible={modalVisible}
-                onClose={() => setModalVisible(false)}
-                source={dataSource}
-                onSourceChange={setDataSource}
-                onDeviceConnected={handleDeviceConnected}
-                onSineValueUpdate={handleSineValueUpdate}
-            />
-        </View>
-    );
-}
-*/

@@ -22,7 +22,10 @@ export default function SkiaLineChart({
     const [fullscreen, setFullscreen] = useState(false);
 
     useEffect(() => {
-        scrollViewRef.current?.scrollToEnd({ animated: true });
+        if (data.length > 200) {
+            // Evita scroll no início com poucos dados
+            scrollViewRef.current?.scrollToEnd({ animated: true });
+        }
     }, [data]);
 
     // Controle de orientação em fullscreen
@@ -44,13 +47,43 @@ export default function SkiaLineChart({
         };
     }, [fullscreen, fullscreenEnabled]);
 
-    if (!font) return null;
+    if (!font || data.length < 2)
+        return (
+            <View style={{ height }}>
+                <Text>Aguardando dados...</Text>
+            </View>
+        ); // <-- Melhor feedback inicial
 
-    const pointSpacing = 4;
-    const maxY = Math.max(...data);
-    const width = data.length * pointSpacing + padding * 2; // chart width
+    const chartHeight = height - padding * 2;
+    const chartWidth = data.length * 2; // Usaremos pointSpacing fixo de 2
+    const canvasWidth = chartWidth + padding * 2;
 
-    const points = translateDataToPoints(data as number[]);
+    // 1. Encontrar a amplitude máxima absoluta para escalar o gráfico verticalmente
+    // const absoluteMax = Math.max(...data.map(Math.abs));
+
+    // Se todos os dados forem zero, evitamos divisão por zero.
+    // const yAxisMax = absoluteMax === 0 ? 1 : absoluteMax;
+    const yAxisMax = 24000;
+
+    // 2. Definir a posição do eixo zero (bem no meio do gráfico)
+    const zeroAxisY = padding + chartHeight / 2;
+
+    // 3. Função de mapeamento de dados para pontos na tela (nova lógica)
+    function translateDataToPoints(rawData: number[]) {
+        return rawData.map((value, index) => {
+            const x = index * 2 + padding;
+            const y = zeroAxisY - (value / yAxisMax) * (chartHeight / 2);
+
+            // 3. O mapeamento está correto para um valor negativo?
+            if (index === 0 && value < 0) {
+                // Log apenas para o primeiro ponto negativo que encontrar
+                console.log(`Valor negativo ${value} foi mapeado para y = ${y}`);
+            }
+            return { x, y };
+        });
+    }
+
+    const points = translateDataToPoints(data);
     const path = Skia.Path.Make();
 
     if (points.length > 0) {
@@ -58,109 +91,51 @@ export default function SkiaLineChart({
         points.slice(1).forEach((p) => path.lineTo(p.x, p.y));
     }
 
-    function translateDataToPoints(data: number[]) {
-        const maxY = Math.max(...data);
+    const renderChart = (renderHeight: number) => {
+        // Recalcular posições com base na altura de renderização
+        const currentChartHeight = renderHeight - padding * 2;
+        const currentZeroAxisY = padding + currentChartHeight / 2;
 
-        return data.map((value, index) => ({
-            x: index * pointSpacing + padding,
-            y: (value / maxY) * (height - padding * 2) + padding,
-        }));
-    }
+        return (
+            <View style={styles.chartContainer}>
+                {/* Labels do Eixo Y (Positivo e Negativo) */}
+                <View
+                    style={[
+                        styles.yAxis,
+                        {
+                            height: renderHeight,
+                            justifyContent: 'space-between',
+                            paddingTop: padding,
+                            paddingBottom: padding,
+                        },
+                    ]}
+                >
+                    <Text>{yAxisMax.toFixed(0)}</Text>
+                    <Text>0</Text>
+                    <Text>{(-yAxisMax).toFixed(0)}</Text>
+                </View>
 
-    const renderChart = (graphHeight: number) => (
-        <View style={styles.chartContainer}>
-            {/* Label y fixa */}
-            <View
-                style={[
-                    styles.yAxis,
-                    {
-                        width: 40,
-                        height: graphHeight,
-                        paddingTop: padding / 2,
-                        paddingBottom: padding,
-                        justifyContent: 'space-around',
-                    },
-                ]}
-            >
-                {Array.from({ length: Math.floor(maxY / 20) + 1 }, (_, i) => {
-                    const value = (Math.floor(maxY / 20) - i) * 20;
-                    return (
-                        <View key={`y-label-${i}`}>
-                            <Text>{value}</Text>
-                        </View>
-                    );
-                })}
+                <ScrollView
+                    horizontal
+                    ref={scrollViewRef}
+                    contentContainerStyle={{ width: canvasWidth, height: renderHeight }}
+                >
+                    <Canvas style={styles.canvas}>
+                        {/* EIXO ZERO HORIZONTAL (LINHA CENTRAL) */}
+                        <Line
+                            p1={{ x: padding, y: currentZeroAxisY }}
+                            p2={{ x: canvasWidth - padding, y: currentZeroAxisY }}
+                            color="#e0e0e0"
+                            strokeWidth={1.5}
+                        />
+
+                        {/* Linha de dados */}
+                        <Path path={path} color="blue" style="stroke" strokeWidth={2} />
+                    </Canvas>
+                </ScrollView>
             </View>
-
-            <ScrollView
-                horizontal
-                ref={scrollViewRef}
-                contentContainerStyle={[styles.scrollViewContent, { width, height: graphHeight }]}
-            >
-                <Canvas style={styles.canvas}>
-                    {/* Grades horizontais */}
-                    {Array.from({ length: Math.floor(maxY / 20) + 1 }, (_, i) => {
-                        const value = i * 20;
-                        const y =
-                            graphHeight - ((value / maxY) * (graphHeight - padding * 2) + padding);
-                        return (
-                            <Line
-                                key={`grid-h-${i}`}
-                                p1={{ x: padding, y }}
-                                p2={{ x: width - padding, y }}
-                                color="#e0e0e0"
-                                strokeWidth={1}
-                            />
-                        );
-                    })}
-
-                    {/* Grades verticais */}
-                    {points
-                        .filter((_, i) => i % 20 === 0)
-                        .map((p, i) => (
-                            <Line
-                                key={`grid-v-${i}`}
-                                p1={{ x: p.x, y: padding }}
-                                p2={{ x: p.x, y: graphHeight - padding }}
-                                color="#e0e0e0"
-                                strokeWidth={1}
-                            />
-                        ))}
-
-                    {/* Eixos */}
-                    <Line
-                        p1={{ x: padding, y: graphHeight - padding }}
-                        p2={{ x: width - padding, y: graphHeight - padding }}
-                        color="black"
-                        strokeWidth={2}
-                    />
-                    <Line
-                        p1={{ x: padding, y: padding }}
-                        p2={{ x: padding, y: graphHeight - padding }}
-                        color="black"
-                        strokeWidth={2}
-                    />
-
-                    {/* Linha de dados */}
-                    <Path path={path} color="blue" style="stroke" strokeWidth={2} />
-
-                    {/* Labels X */}
-                    {points
-                        .filter((_, i) => i % 20 === 0)
-                        .map((p, i) => (
-                            <SkiaText
-                                key={`x-label-${i}`}
-                                x={p.x - 10}
-                                y={graphHeight - padding + 20}
-                                text={`${i * 20 || 0}`}
-                                font={font}
-                                color="black"
-                            />
-                        ))}
-                </Canvas>
-            </ScrollView>
-        </View>
-    );
+        );
+    };
 
     return (
         <View style={{ flex: 1 }}>
