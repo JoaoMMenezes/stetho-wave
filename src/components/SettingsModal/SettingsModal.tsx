@@ -23,13 +23,13 @@ interface SettingsModalProps {
     onSourceChange: (source: 'mic' | 'ble') => void;
     // Atualizado para passar o valor da senoide, se necessário, ou apenas notificar a conexão
     onDeviceConnected: (device: Device) => void; // Callback quando o dispositivo conectar
-    onSineValueUpdate: (value: number) => void; // Callback para atualizar o valor da senoide no componente pai
+    onSineValueUpdate: (newSamples: number[]) => void; // Callback para atualizar o valor da senoide no componente pai
 }
 
 // UUIDs do seu ESP32 (conforme o firmware da senoide)
 const SERVICE_UUID = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';
 const CHARACTERISTIC_UUID = 'beb5483e-36e1-4688-b7f5-ea07361b26a8'; // Renomeado para clareza
-const TARGET_DEVICE_NAME = 'ESP32_Audio_BLE'; // Nome do seu dispositivo ESP32
+const TARGET_DEVICE_NAME = 'ESP32_Audio_Stream'; // Nome do seu dispositivo ESP32
 
 // Instância única do BleManager
 const bleManager = new BleManager();
@@ -167,6 +167,14 @@ export default function SettingsModal({
                     const connectedDev = await device.connect();
                     console.log('Conectado com sucesso a:', connectedDev.name);
 
+                    // Solicita um MTU maior para otimizar a transferência de dados. 517 é o máximo para ESP32.
+                    try {
+                        await connectedDev.requestMTU(517);
+                        console.log('MTU negociado com sucesso.');
+                    } catch (mtuError) {
+                        console.warn('Falha ao negociar MTU:', mtuError);
+                    }
+
                     setConnectedDevice(connectedDev); // Armazena o objeto do dispositivo conectado
                     setIsConnected(true);
                     setIsLoading(false); // Conexão estabelecida, para o loading principal
@@ -178,83 +186,45 @@ export default function SettingsModal({
                     // Notificar o componente pai sobre a conexão
                     onDeviceConnected(connectedDev);
 
-                    // Leitura inicial (opcional, já que vamos monitorar)
-                    try {
-                        const char = await connectedDev.readCharacteristicForService(
-                            SERVICE_UUID,
-                            CHARACTERISTIC_UUID
-                        );
-                        if (char?.value) {
-                            const decodedValue = Base64.decode(char.value);
-                            const floatVal = parseFloat(decodedValue);
-                            console.log('Valor inicial lido:', floatVal);
-                            setLastSampleValue(floatVal);
-                            onSineValueUpdate(floatVal);
-                        }
-                    } catch (readError) {
-                        console.warn('Erro na leitura inicial da característica:', readError);
-                    }
-
                     // Monitorar a característica para atualizações da senoide
                     console.log('Iniciando monitoramento da característica...');
                     const subscriptionId = `monitor-${CHARACTERISTIC_UUID}`; // ID único para a transação
-                    connectedDev.monitorCharacteristicForService(
+                    const subscription = connectedDev.monitorCharacteristicForService(
                         SERVICE_UUID,
-                        CHARACTERISTIC_UUID, // Use o UUID correto
+                        CHARACTERISTIC_UUID,
                         (err, characteristic) => {
                             if (err) {
-                                console.warn(
-                                    'Erro no monitoramento da característica:',
-                                    err.message
-                                );
-                                // Adicione sua lógica de tratamento de erro/desconexão aqui
+                                console.warn('Erro no monitoramento:', err.message);
                                 return;
                             }
 
-                            // 2. A MÁGICA ACONTECE AQUI
                             if (characteristic?.value) {
-                                // Decodifica a string Base64 para uma string de bytes brutos
-                                const rawByteString = Base64.decode(characteristic.value);
-
-                                // Cria um buffer de bytes (Uint8Array) a partir da string
-                                const byteArray = new Uint8Array(rawByteString.length);
-                                for (let i = 0; i < rawByteString.length; i++) {
-                                    byteArray[i] = rawByteString.charCodeAt(i);
-                                }
-
-                                // Usa um DataView para ler os números de 16-bit do buffer de bytes
+                                // 1. DECODIFICAR OS DADOS PARA UM ARRAY DE INTEIROS DE 16-BIT
+                                const byteArray = Base64.toUint8Array(characteristic.value);
                                 const dataView = new DataView(byteArray.buffer);
-                                const audioSamples = [];
+                                const int16Samples = [];
 
-                                // Itera sobre o buffer, lendo 2 bytes (16 bits) de cada vez
                                 try {
+                                    // Lê o buffer de 2 em 2 bytes para obter os inteiros
                                     for (let i = 0; i < dataView.byteLength; i += 2) {
-                                        // O 'true' no final indica "little-endian", que é o formato do ESP32.
-                                        const sample = dataView.getInt16(i, true);
-                                        audioSamples.push(sample);
+                                        const sample = dataView.getInt16(i, true); // O 'true' indica little-endian (correto)
+                                        int16Samples.push(sample);
                                     }
                                 } catch (e) {
-                                    // console.error('Erro ao processar os dados recebidos:', e);
+                                    console.error('Erro ao processar os dados recebidos:', e);
                                 }
 
-                                if (audioSamples.length > 0) {
-                                    // Pega a última amostra do pacote
-                                    const latestSample = audioSamples[audioSamples.length - 1];
+                                // 2. CONVERTER OS DADOS DE int16 PARA PASCAL
+                                const pascalSamples = int16Samples.map((sample) =>
+                                    convertInt16SampleToPascal(sample)
+                                );
 
-                                    // 1. Atualiza o estado local para exibição no modal
-                                    setLastSampleValue(latestSample);
-
-                                    // 2. Chama a função do componente pai com o valor mais recente
-                                    onSineValueUpdate(latestSample);
+                                if (pascalSamples.length > 0) {
+                                    onSineValueUpdate(pascalSamples);
                                 }
-
-                                // Agora você pode usar este array de amostras
-                                // Por exemplo, atualizar um estado para visualização
-                                // onAudioDataUpdate(audioSamples);
-                                // setAudioData(prevData => [...prevData, ...audioSamples]); // Para acumular dados
                             }
                         },
-                        subscriptionId
+                        `monitor-${CHARACTERISTIC_UUID}` // ID da transação
                     );
                     console.log(`Monitoramento iniciado com ID: ${subscriptionId}`);
                 } catch (connectionError) {
@@ -274,7 +244,6 @@ export default function SettingsModal({
             }
         });
 
-        // Timeout para o scan
         setTimeout(() => {
             if (isScanning) {
                 // Só para o scan se ainda estiver escaneando
@@ -286,7 +255,7 @@ export default function SettingsModal({
                     setIsLoading(false);
                 }
             }
-        }, 15000); // Reduzido para 15 segundos, ajuste conforme necessário
+        }, 15000);
     }
 
     async function disconnectFromDevice() {
@@ -314,29 +283,45 @@ export default function SettingsModal({
         setIsLoading(false); // Garante que o loading seja resetado
     }
 
-    // A função toggleBoxValue não é mais relevante para a senoide,
-    // a menos que você queira enviar algo de volta ao ESP32.
-    // Se precisar enviar dados, adapte esta função.
-    /*
-    async function toggleSomeValue() {
-        if (!connectedDevice || !isConnected) {
-            console.warn("Não conectado, não é possível enviar dados.");
-            return;
+    //================================================================
+    // --- SEÇÃO DE CONVERSÃO ACÚSTICA (LADO DO CLIENTE) ---
+    //================================================================
+
+    // Sensibilidade do Microfone em dBFS para um sinal de 94 dB SPL.
+    const MIC_SENSITIVITY_DBFS = -26.0;
+    // Nível de Pressão Sonora de referência que gera o sinal acima.
+    const REF_DB_SPL = 94.0;
+    // Valor máximo para um inteiro de 16 bits com sinal (o formato que estamos recebendo).
+    const FULL_SCALE_16_BIT = 32767.0;
+    // Pressão de referência do ar em Pascal (limiar da audição).
+    const REF_PRESSURE_PA = 20.0e-6;
+
+    /**
+     * Converte uma amostra de áudio de 16 bits para pressão em Pascal (Pa).
+     * @param {number} sampleInt16 A amostra no formato int16 (-32768 a 32767).
+     * @returns {number} A pressão sonora correspondente em Pascal.
+     */
+    const convertInt16SampleToPascal = (sampleInt16: any) => {
+        if (sampleInt16 === 0) {
+            return 0.0;
         }
-        // Exemplo: Enviar um comando para o ESP32
-        const command = "PAUSE_SINE"; // Ou algum valor numérico
-        try {
-            await connectedDevice.writeCharacteristicWithResponseForService(
-                SERVICE_UUID,
-                CHARACTERISTIC_UUID, // Certifique-se que esta característica permite escrita no ESP32
-                Base64.encode(command)
-            );
-            console.log("Comando enviado:", command);
-        } catch (error) {
-            console.error("Erro ao escrever na característica:", error);
+
+        // 1. Converter a amostra para dBFS (Decibels relative to Full Scale de 16-bit)
+        const dbfs = 20 * Math.log10(Math.abs(sampleInt16) / FULL_SCALE_16_BIT);
+
+        // 2. Converter dBFS para dB SPL (Sound Pressure Level)
+        const dbspl = REF_DB_SPL + (dbfs - MIC_SENSITIVITY_DBFS);
+
+        // 3. Converter dB SPL para Pascal
+        let pascals = REF_PRESSURE_PA * Math.pow(10, dbspl / 20);
+
+        // 4. Reaplicar o sinal original da amostra
+        if (sampleInt16 < 0) {
+            pascals = -pascals;
         }
-    }
-    */
+
+        return pascals;
+    };
 
     return (
         <Modal animationType="fade" transparent visible={visible} onRequestClose={onClose}>

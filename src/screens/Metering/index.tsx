@@ -21,7 +21,7 @@ interface RecordingData {
     observations: string;
 }
 
-const MAX_DATA_POINTS_CHART = 200;
+const MAX_DATA_POINTS_CHART = 2000;
 
 export default function Metering() {
     const { create } = useMeteringDatabase();
@@ -199,14 +199,33 @@ export default function Metering() {
         // Alert.alert("Conectado", `Conectado ao ${device.name}. Agora você pode iniciar a captura BLE.`);
     };
 
-    const handleSineValueUpdate = (value: number) => {
-        // Este log é crucial para ver o estado no momento da chegada dos dados
-        // console.log(
-        //     `[Metering handleSineValueUpdate] Valor: ${value}, Fonte: ${source}, Gravando: ${isRecordingActive}`
-        // );
+    // const handleSineValueUpdate = (value: number) => {
+    //     // Este log é crucial para ver o estado no momento da chegada dos dados
+    //     // console.log(
+    //     //     `[Metering handleSineValueUpdate] Valor: ${value}, Fonte: ${source}, Gravando: ${isRecordingActive}`
+    //     // );
+    //     if (source === 'ble') {
+    //         setCurrentMeteringData((prevData) => {
+    //             const newData = [...prevData, value];
+    //             if (newData.length > MAX_DATA_POINTS_CHART) {
+    //                 return newData.slice(newData.length - MAX_DATA_POINTS_CHART);
+    //             }
+    //             return newData;
+    //         });
+    //     }
+    // };
+
+    /**
+     * Lida com a chegada de um novo "bloco" de amostras de áudio.
+     * @param {number[]} newSamples O array de novas amostras recebidas do BLE.
+     */
+    const handleSineValueUpdate = (newSamples: number[]) => {
         if (source === 'ble') {
             setCurrentMeteringData((prevData) => {
-                const newData = [...prevData, value];
+                // Usa o operador spread (...) para concatenar o array antigo com o novo.
+                const newData = [...prevData, ...newSamples];
+
+                // A lógica para limitar o tamanho do array continua funcionando perfeitamente.
                 if (newData.length > MAX_DATA_POINTS_CHART) {
                     return newData.slice(newData.length - MAX_DATA_POINTS_CHART);
                 }
@@ -222,7 +241,7 @@ export default function Metering() {
                     data={currentMeteringData}
                     fullscreenEnabled={true}
                     height={(screenDimensions.height - 50 - 30) * 0.55 - 40}
-                    padding={screenDimensions.width * 0.05}
+                    // padding={screenDimensions.width * 0.05}
                 />
             </View>
 

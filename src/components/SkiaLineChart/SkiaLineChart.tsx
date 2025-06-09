@@ -1,144 +1,183 @@
-import React, { useRef, useEffect, useState } from 'react';
-import { View, ScrollView, Text, Modal, TouchableOpacity, Button, Dimensions } from 'react-native';
-import { Canvas, Path, Skia, Text as SkiaText, useFont, Line } from '@shopify/react-native-skia';
+import React, { useEffect, useState, useMemo } from 'react';
+import { View, Text, Modal, TouchableOpacity, Button, Dimensions } from 'react-native';
+import { Canvas, Path, Skia, useFont, Line, Text as SkiaText } from '@shopify/react-native-skia';
 import * as ScreenOrientation from 'expo-screen-orientation';
-import { styles } from './_layout';
+import { styles } from './_layout'; // Seus estilos
 
 interface SkiaLineChartProps {
     data: number[];
     height?: number;
-    padding?: number;
+    // O padding agora é gerenciado internamente, então podemos simplificar as props
     fullscreenEnabled?: boolean;
+}
+
+// A função de downsampling que criamos anteriormente continua útil
+function downsampleData(data: number[], targetPoints: number): number[] {
+    if (data.length <= targetPoints || targetPoints <= 0) {
+        return data;
+    }
+    const downsampled = [];
+    const bucketSize = data.length / targetPoints;
+    for (let i = 0; i < targetPoints; i++) {
+        const bucketStart = Math.floor(i * bucketSize);
+        const bucketEnd = Math.floor((i + 1) * bucketSize);
+        const bucket = data.slice(bucketStart, bucketEnd);
+        if (bucket.length === 0) continue;
+        let peak = bucket[0];
+        for (let j = 1; j < bucket.length; j++) {
+            if (Math.abs(bucket[j]) > Math.abs(peak)) {
+                peak = bucket[j];
+            }
+        }
+        downsampled.push(peak);
+    }
+    return downsampled;
 }
 
 export default function SkiaLineChart({
     data,
     height = 300,
-    padding = 40,
     fullscreenEnabled = false,
 }: SkiaLineChartProps) {
-    const scrollViewRef = useRef<ScrollView>(null);
-    const font = useFont(require('../../../assets/fonts/SpaceMono-Regular.ttf'), 12);
+    const font = useFont(require('../../../assets/fonts/SpaceMono-Regular.ttf'), 10); // Ajuste o tamanho da fonte se necessário
     const [fullscreen, setFullscreen] = useState(false);
 
-    useEffect(() => {
-        if (data.length > 200) {
-            // Evita scroll no início com poucos dados
-            scrollViewRef.current?.scrollToEnd({ animated: true });
-        }
-    }, [data]);
-
-    // Controle de orientação em fullscreen
-    useEffect(() => {
-        if (!fullscreenEnabled || !fullscreen) return;
-        (async () => {
-            await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE_RIGHT);
-        })();
-
-        // get height of screen when in fullscreen
-        const dimensions = Dimensions.get('window');
-        const newHeight = dimensions.height;
-        if (newHeight !== height) {
-            height = newHeight;
-        }
-
-        return () => {
-            ScreenOrientation.unlockAsync();
-        };
-    }, [fullscreen, fullscreenEnabled]);
-
-    if (!font || data.length < 2)
-        return (
-            <View style={{ height }}>
-                <Text>Aguardando dados...</Text>
-            </View>
-        ); // <-- Melhor feedback inicial
-
-    const chartHeight = height - padding * 2;
-    const chartWidth = data.length * 2; // Usaremos pointSpacing fixo de 2
-    const canvasWidth = chartWidth + padding * 2;
-
-    // 1. Encontrar a amplitude máxima absoluta para escalar o gráfico verticalmente
-    // const absoluteMax = Math.max(...data.map(Math.abs));
-
-    // Se todos os dados forem zero, evitamos divisão por zero.
-    // const yAxisMax = absoluteMax === 0 ? 1 : absoluteMax;
-    const yAxisMax = 24000;
-
-    // 2. Definir a posição do eixo zero (bem no meio do gráfico)
-    const zeroAxisY = padding + chartHeight / 2;
-
-    // 3. Função de mapeamento de dados para pontos na tela (nova lógica)
-    function translateDataToPoints(rawData: number[]) {
-        return rawData.map((value, index) => {
-            const x = index * 2 + padding;
-            const y = zeroAxisY - (value / yAxisMax) * (chartHeight / 2);
-
-            // 3. O mapeamento está correto para um valor negativo?
-            if (index === 0 && value < 0) {
-                // Log apenas para o primeiro ponto negativo que encontrar
-                console.log(`Valor negativo ${value} foi mapeado para y = ${y}`);
-            }
-            return { x, y };
-        });
-    }
-
-    const points = translateDataToPoints(data);
-    const path = Skia.Path.Make();
-
-    if (points.length > 0) {
-        path.moveTo(points[0].x, points[0].y);
-        points.slice(1).forEach((p) => path.lineTo(p.x, p.y));
-    }
-
     const renderChart = (renderHeight: number) => {
-        // Recalcular posições com base na altura de renderização
-        const currentChartHeight = renderHeight - padding * 2;
-        const currentZeroAxisY = padding + currentChartHeight / 2;
+        // --- Definição da Área do Gráfico ---
+        const PADDING_TOP = 20;
+        const PADDING_BOTTOM = 30;
+        const PADDING_LEFT = 40;
+        const PADDING_RIGHT = 20;
+
+        const screenWidth = Dimensions.get('window').width;
+
+        const canvasWidth = screenWidth * 0.8;
+        const canvasHeight = renderHeight;
+
+        const chartWidth = canvasWidth - PADDING_LEFT - PADDING_RIGHT;
+        const chartHeight = canvasHeight - PADDING_TOP - PADDING_BOTTOM;
+
+        const yAxisMax = 1.5;
+
+        const processedData = useMemo(
+            () => downsampleData(data, Math.floor(chartWidth)),
+            [data, chartWidth]
+        );
+
+        const valueToY = (value: number) => {
+            const chartZeroY = PADDING_TOP + chartHeight / 2;
+            return chartZeroY - (value / yAxisMax) * (chartHeight / 2);
+        };
+
+        const path = useMemo(() => {
+            if (processedData.length < 2) return Skia.Path.Make();
+            const newPath = Skia.Path.Make();
+            const scaleX = chartWidth / (processedData.length - 1);
+            newPath.moveTo(PADDING_LEFT, valueToY(processedData[0]));
+            processedData.forEach((value, index) => {
+                if (index > 0) {
+                    newPath.lineTo(PADDING_LEFT + index * scaleX, valueToY(value));
+                }
+            });
+            return newPath;
+        }, [processedData, chartWidth]);
+
+        const yAxisLabels = [];
+        for (let i = yAxisMax; i >= -yAxisMax; i -= 0.25) {
+            yAxisLabels.push(i);
+        }
+
+        const xAxisLabels = [];
+        const numLabelsX = 5;
+        for (let i = 0; i < numLabelsX; i++) {
+            const dataIndex = Math.floor((data.length / (numLabelsX - 1)) * i);
+            const xPos = PADDING_LEFT + (chartWidth / (numLabelsX - 1)) * i;
+            xAxisLabels.push({ text: `${dataIndex}`, x: xPos });
+        }
+        if (xAxisLabels.length > 0) {
+            xAxisLabels[xAxisLabels.length - 1] = {
+                text: `${data.length - 1}`,
+                x: PADDING_LEFT + chartWidth,
+            };
+        }
+
+        if (!font || data.length < 2) {
+            return (
+                <View
+                    style={{ height: canvasHeight, alignSelf: 'center', justifyContent: 'center' }}
+                >
+                    <Text>Aguardando dados suficientes...</Text>
+                </View>
+            );
+        }
 
         return (
-            <View style={styles.chartContainer}>
-                {/* Labels do Eixo Y (Positivo e Negativo) */}
-                <View
-                    style={[
-                        styles.yAxis,
-                        {
-                            height: renderHeight,
-                            justifyContent: 'space-between',
-                            paddingTop: padding,
-                            paddingBottom: padding,
-                        },
-                    ]}
-                >
-                    <Text>{yAxisMax.toFixed(0)}</Text>
-                    <Text>0</Text>
-                    <Text>{(-yAxisMax).toFixed(0)}</Text>
-                </View>
+            <Canvas style={{ width: canvasWidth, height: canvasHeight }}>
+                {/* Eixo Y vertical */}
+                <Line
+                    p1={{ x: PADDING_LEFT, y: PADDING_TOP }}
+                    p2={{ x: PADDING_LEFT, y: PADDING_TOP + chartHeight }}
+                    color="grey"
+                    strokeWidth={1}
+                />
 
-                <ScrollView
-                    horizontal
-                    ref={scrollViewRef}
-                    contentContainerStyle={{ width: canvasWidth, height: renderHeight }}
-                >
-                    <Canvas style={styles.canvas}>
-                        {/* EIXO ZERO HORIZONTAL (LINHA CENTRAL) */}
-                        <Line
-                            p1={{ x: padding, y: currentZeroAxisY }}
-                            p2={{ x: canvasWidth - padding, y: currentZeroAxisY }}
-                            color="#e0e0e0"
-                            strokeWidth={1.5}
-                        />
+                {/* NOVO: Label de unidade do Eixo Y (Pascal) */}
+                <SkiaText
+                    x={PADDING_LEFT - 35}
+                    y={PADDING_TOP - 10}
+                    text="(Pa)"
+                    font={font}
+                    color="grey"
+                />
 
-                        {/* Linha de dados */}
-                        <Path path={path} color="blue" style="stroke" strokeWidth={2} />
-                    </Canvas>
-                </ScrollView>
-            </View>
+                {/* Linhas Guia Horizontais e Labels do Eixo Y */}
+                {yAxisLabels.map((label, index) => {
+                    const y = valueToY(label);
+
+                    // ALTERAÇÃO: Condicional para destacar a linha do zero
+                    const isZeroAxis = label === 0;
+                    const lineColor = isZeroAxis ? '#999999' : '#e0e0e0'; // Cinza mais escuro para o eixo zero
+                    const lineWidth = isZeroAxis ? 1 : 0.5;
+
+                    return (
+                        <React.Fragment key={index}>
+                            <Line
+                                p1={{ x: PADDING_LEFT, y }}
+                                p2={{ x: PADDING_LEFT + chartWidth, y }}
+                                color={lineColor}
+                                strokeWidth={lineWidth}
+                            />
+                            <SkiaText
+                                x={PADDING_LEFT - 35}
+                                y={y + 4}
+                                text={label.toFixed(2)}
+                                font={font}
+                                color="grey"
+                            />
+                        </React.Fragment>
+                    );
+                })}
+
+                {/* Labels do Eixo X */}
+                {xAxisLabels.map((label, index) => (
+                    <SkiaText
+                        key={index}
+                        x={label.x - 10}
+                        y={PADDING_TOP + chartHeight + 20}
+                        text={label.text}
+                        font={font}
+                        color="grey"
+                    />
+                ))}
+
+                {/* Path Principal com os dados */}
+                <Path path={path} color="#6A5ACD" style="stroke" strokeWidth={2} />
+            </Canvas>
         );
     };
 
     return (
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
             {fullscreenEnabled && (
                 <View style={styles.fullscreenHeader}>
                     <TouchableOpacity onPress={() => setFullscreen(true)}>
