@@ -20,7 +20,7 @@
 
 // 3. PARÂMETROS DE ÁUDIO OTIMIZADOS
 #define I2S_PORT          I2S_NUM_0
-#define I2S_SAMPLE_RATE   32000     // Aumentar a taxa de amostragem agora é mais viável
+#define I2S_SAMPLE_RATE   20000     // Aumentar a taxa de amostragem agora é mais viável
 #define I2S_SAMPLE_BITS   I2S_BITS_PER_SAMPLE_32BIT
 #define I2S_CHANNEL_FMT   I2S_CHANNEL_FMT_ONLY_LEFT
 

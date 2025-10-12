@@ -348,7 +348,7 @@ export default function SettingsModal({
                             trackColor={{ false: '#767577', true: defaultTheme.colors.primary }}
                             thumbColor={source === 'ble' ? defaultTheme.colors.primary : '#f4f3f4'}
                         />
-                        <Text>Bluetooth (Senoide)</Text>
+                        <Text>Bluetooth</Text>
                     </View>
 
                     {isLoading && (
@@ -371,7 +371,7 @@ export default function SettingsModal({
                                     marginVertical: 10,
                                 }}
                             >
-                                Valor da Senoide: {lastSampleValue.toFixed(2)}
+                                Valor: {lastSampleValue.toFixed(2)}
                             </Text>
                             <Button
                                 title="Desconectar do ESP32"
@@ -385,7 +385,7 @@ export default function SettingsModal({
 
                     {!isLoading && !isConnected && (
                         <Button
-                            title="Conectar ao ESP32 (Senoide)"
+                            title="Conectar ao ESP32"
                             onPress={connectAndMonitorDevice}
                             disabled={isScanning || isLoading}
                             color={defaultTheme.colors.primary}

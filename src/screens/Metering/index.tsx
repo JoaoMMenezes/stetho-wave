@@ -21,7 +21,11 @@ interface RecordingData {
     observations: string;
 }
 
-const MAX_DATA_POINTS_CHART = 2000;
+const MAX_DATA_POINTS_CHART = 20000;
+// Defina a janela de tempo que você quer exibir. 2 segundos é um bom começo.
+const SAMPLE_RATE = 20000; // Taxa de amostragem, conforme definido no ESP32
+const WINDOW_DURATION_SECONDS = 1; // Queremos exibir os últimos 2 segundos de dados
+const MAX_SAMPLES_IN_WINDOW = SAMPLE_RATE * WINDOW_DURATION_SECONDS; // = 64.000 amostras
 
 export default function Metering() {
     const { create } = useMeteringDatabase();
@@ -220,16 +224,14 @@ export default function Metering() {
      * @param {number[]} newSamples O array de novas amostras recebidas do BLE.
      */
     const handleSineValueUpdate = (newSamples: number[]) => {
+        // Só atualiza se a captura BLE estiver ativa e a fonte for 'ble'
         if (source === 'ble') {
             setCurrentMeteringData((prevData) => {
-                // Usa o operador spread (...) para concatenar o array antigo com o novo.
-                const newData = [...prevData, ...newSamples];
+                // 1. Concatena os dados antigos com os novos que chegaram
+                const combinedData = [...prevData, ...newSamples];
 
-                // A lógica para limitar o tamanho do array continua funcionando perfeitamente.
-                if (newData.length > MAX_DATA_POINTS_CHART) {
-                    return newData.slice(newData.length - MAX_DATA_POINTS_CHART);
-                }
-                return newData;
+                // 2. Retorna sempre os últimos N elementos, criando a "janela deslizante"
+                return combinedData.slice(-MAX_SAMPLES_IN_WINDOW);
             });
         }
     };

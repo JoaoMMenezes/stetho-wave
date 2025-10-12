@@ -57,7 +57,8 @@ export default function SkiaLineChart({
         const chartWidth = canvasWidth - PADDING_LEFT - PADDING_RIGHT;
         const chartHeight = canvasHeight - PADDING_TOP - PADDING_BOTTOM;
 
-        const yAxisMax = 1.5;
+        const yAxisMax = 2.0;
+        const linesOffset = 1;
 
         const processedData = useMemo(
             () => downsampleData(data, Math.floor(chartWidth)),
@@ -83,7 +84,7 @@ export default function SkiaLineChart({
         }, [processedData, chartWidth]);
 
         const yAxisLabels = [];
-        for (let i = yAxisMax; i >= -yAxisMax; i -= 0.25) {
+        for (let i = yAxisMax; i >= -yAxisMax; i -= linesOffset) {
             yAxisLabels.push(i);
         }
 
