@@ -11,6 +11,8 @@ import { Patient, usePatientDatabase } from '@/database/usePatientDatabase';
 import { useMeteringDatabase } from '@/database/useMeteringDatabase';
 import SettingsModal from '@/components/SettingsModal/SettingsModal';
 import { Device } from 'react-native-ble-plx';
+import * as FileSystem from 'expo-file-system';
+import { createWavFile } from '@/utils/audioUtils';
 
 interface RecordingData {
     uri: string;
@@ -37,7 +39,10 @@ export default function Metering() {
     const [bleDevice, setBleDevice] = useState<Device | null>(null);
     const [currentMeteringData, setCurrentMeteringData] = useState<number[]>([0]);
     const [isRecording, setIsRecording] = useState(false);
+    const [sound, setSound] = useState<Audio.Sound | null>(null);
+
     const isRecordingRef = useRef(isRecording);
+    const fullRecordingDataRef = useRef<number[]>([]);
 
     useEffect(() => {
         async function loadPatients() {
@@ -51,10 +56,22 @@ export default function Metering() {
         isRecordingRef.current = isRecording;
     }, [isRecording]);
 
+    useEffect(() => {
+        return () => {
+            sound?.unloadAsync();
+        };
+    }, [sound]);
+
     const screenDimensions = Dimensions.get('window');
 
     async function startCapture() {
         setCurrentMeteringData([]);
+        fullRecordingDataRef.current = [];
+
+        if (sound) {
+            await sound.unloadAsync();
+            setSound(null);
+        }
 
         if (!bleDevice) {
             Alert.alert(
@@ -73,12 +90,36 @@ export default function Metering() {
         console.log('[Metering stopCapture] Parando captura. ', 'isRecording era:', isRecording);
         setIsRecording(false);
 
-        if (currentMeteringData.length > 0) {
-            setRecordingUri('ble_data');
+        // Verifica se gravamos algum dado
+        if (fullRecordingDataRef.current.length > 0) {
+            try {
+                console.log('Criando arquivo .wav...');
+                // 1. Cria o arquivo .wav com os dados completos
+                const fileUri = await createWavFile(fullRecordingDataRef.current);
+
+                // 2. Salva a URI real (substitui 'ble_data')
+                setRecordingUri(fileUri);
+                console.log('Arquivo WAV criado em:', fileUri);
+
+                // 3. Carrega o som para reprodução
+                await Audio.setAudioModeAsync({ allowsRecordingIOS: false }); // Necessário para playback
+                const { sound: newSound } = await Audio.Sound.createAsync(
+                    { uri: fileUri },
+                    { shouldPlay: false } // Não toca imediatamente
+                );
+                setSound(newSound); // Salva o objeto de som no estado
+            } catch (error) {
+                console.error('Erro ao criar ou carregar arquivo WAV:', error);
+                Alert.alert('Erro', 'Falha ao processar o áudio gravado.');
+            }
+        } else {
+            console.log('Nenhum dado de áudio para processar.');
+            setRecordingUri(null); // Garante que a URI antiga seja limpa
         }
+
         console.log(
-            '[Metering stopCapture] Captura BLE parada. Dados coletados:',
-            currentMeteringData.length
+            '[Metering stopCapture] Captura BLE parada. Amostras totais:',
+            fullRecordingDataRef.current.length
         );
     }
 
@@ -124,6 +165,18 @@ export default function Metering() {
         });
     };
 
+    /**
+     * Lida com a chegada de um novo "bloco" de amostras de áUDIO BRUTO (Int16).
+     * Usado para construir o arquivo .wav para playback.
+     * @param {number[]} newRawSamples O array de novas amostras Int16.
+     */
+    const handleRawAudioStream = (newRawSamples: number[]) => {
+        if (!isRecordingRef.current) return;
+
+        // Acumula os dados brutos para a gravação completa
+        fullRecordingDataRef.current.push(...newRawSamples);
+    };
+
     return (
         <View style={styles.container}>
             <View style={styles.chartContainer}>
@@ -140,7 +193,7 @@ export default function Metering() {
                     style={styles.modalButton}
                     onPress={handleSaveData}
                     // Habilita salvar se NÃO estiver gravando E tiver dados, OU se gravou algo (recordingUri para mic)
-                    disabled={isRecording || (currentMeteringData.length === 0 && !recordingUri)}
+                    disabled={isRecording || fullRecordingDataRef.current.length === 0}
                 >
                     <MaterialIcons
                         name="save"
@@ -152,6 +205,18 @@ export default function Metering() {
                         }
                     />
                 </Pressable>
+
+                {sound && !isRecording && (
+                    <Pressable
+                        style={styles.modalButton}
+                        onPress={async () => {
+                            console.log('Reproduzindo som...');
+                            await sound.replayAsync(); // Toca do início
+                        }}
+                    >
+                        <MaterialIcons name="play-arrow" size={24} color="white" />
+                    </Pressable>
+                )}
 
                 <Pressable
                     style={styles.recordButton}
@@ -169,7 +234,7 @@ export default function Metering() {
                 visible={saveModalVisible}
                 onClose={() => setSaveModalVisible(false)}
                 onSave={async ({ patientId, tag, observations }) => {
-                    if (currentMeteringData.length === 0) {
+                    if (fullRecordingDataRef.current.length === 0) {
                         console.error('Nenhum dado de medição para salvar.');
                         setSaveModalVisible(false);
                         return;
@@ -178,7 +243,7 @@ export default function Metering() {
                         await create({
                             patient_id: patientId,
                             date: new Date().toISOString(),
-                            data: JSON.stringify(currentMeteringData),
+                            data: JSON.stringify(fullRecordingDataRef.current),
                             tag: tag ?? 'blue',
                             observations: observations ?? '',
                         });
@@ -186,6 +251,11 @@ export default function Metering() {
                         setRecordingUri(null);
                         setCurrentMeteringData([0]);
                         setSaveModalVisible(false);
+                        fullRecordingDataRef.current = [];
+                        if (sound) {
+                            await sound.unloadAsync();
+                            setSound(null);
+                        }
                     } catch (error) {
                         console.error('Erro ao salvar medição:', error);
                         Alert.alert('Erro', 'Falha ao salvar a medição.');
@@ -199,6 +269,7 @@ export default function Metering() {
                 onClose={() => setSettingsModalVisible(false)}
                 onDeviceConnected={handleDeviceConnected}
                 handleDataStream={handleDataStream}
+                handleRawAudioStream={handleRawAudioStream}
             />
         </View>
     );

@@ -23,6 +23,7 @@ interface SettingsModalProps {
     onClose: () => void;
     onDeviceConnected: (device: Device) => void;
     handleDataStream: (newSamples: number[]) => void;
+    handleRawAudioStream: (rawSamples: number[]) => void;
 }
 
 // UUIDs do seu ESP32 (conforme o firmware da senoide)
@@ -38,6 +39,7 @@ export default function SettingsModal({
     onClose,
     onDeviceConnected,
     handleDataStream,
+    handleRawAudioStream,
 }: SettingsModalProps) {
     const [connectedDevice, setConnectedDevice] = useState<Device | null>(null);
     const [isConnected, setIsConnected] = useState(false);
@@ -160,8 +162,17 @@ export default function SettingsModal({
                                     convertInt16SampleToPascal(sample)
                                 );
 
+                                // 3. ENVIAR DADOS CONVERTIDOS (PASCAL) PARA O GRÁFICO
                                 if (pascalSamples.length > 0) {
                                     handleDataStream(pascalSamples);
+
+                                    // (Bônus: Atualiza o valor de amostra no modal)
+                                    setLastSampleValue(pascalSamples[pascalSamples.length - 1]);
+                                }
+
+                                // 4. ENVIAR DADOS BRUTOS (INT16) PARA A GRAVAÇÃO DE ÁUDIO
+                                if (int16Samples.length > 0) {
+                                    handleRawAudioStream(int16Samples); // <-- ADICIONE ESTA LINHA
                                 }
                             }
                         },
