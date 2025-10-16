@@ -11,7 +11,6 @@ import { Patient, usePatientDatabase } from '@/database/usePatientDatabase';
 import { useMeteringDatabase } from '@/database/useMeteringDatabase';
 import SettingsModal from '@/components/SettingsModal/SettingsModal';
 import { Device } from 'react-native-ble-plx';
-import AudioBLEDebug from '@/components/TestBluetooth/AudioBLEDebug';
 
 interface RecordingData {
     uri: string;
@@ -30,27 +29,15 @@ const MAX_SAMPLES_IN_WINDOW = SAMPLE_RATE * WINDOW_DURATION_SECONDS; // = 64.000
 export default function Metering() {
     const { create } = useMeteringDatabase();
     const { getAll } = usePatientDatabase();
-    const [permissionResponse, requestPermission] = Audio.usePermissions();
 
     const [patients, setPatients] = useState<Patient[]>([]);
-    const [micRecording, setMicRecording] = useState<Recording | undefined>(undefined);
     const [recordingUri, setRecordingUri] = useState<string | null>(null);
     const [saveModalVisible, setSaveModalVisible] = useState(false);
     const [settingsModalVisible, setSettingsModalVisible] = useState(false);
-    const [source, setSource] = useState<'mic' | 'ble'>('mic');
     const [bleDevice, setBleDevice] = useState<Device | null>(null);
     const [currentMeteringData, setCurrentMeteringData] = useState<number[]>([0]);
-    const [isRecordingActive, setIsRecordingActive] = useState(false);
-
-    // Efeito para logar mudanças em bleDevice - útil para depuração
-    useEffect(() => {
-        console.log('[Metering useEffect] bleDevice mudou:', bleDevice ? bleDevice.id : null);
-    }, [bleDevice]);
-
-    // Efeito para logar mudanças em isRecordingActive - útil para depuração
-    useEffect(() => {
-        console.log('[Metering useEffect] isRecordingActive mudou:', isRecordingActive);
-    }, [isRecordingActive]);
+    const [isRecording, setIsRecording] = useState(false);
+    const isRecordingRef = useRef(isRecording);
 
     useEffect(() => {
         async function loadPatients() {
@@ -60,124 +47,43 @@ export default function Metering() {
         loadPatients();
     }, []);
 
+    useEffect(() => {
+        isRecordingRef.current = isRecording;
+    }, [isRecording]);
+
     const screenDimensions = Dimensions.get('window');
 
     async function startCapture() {
-        console.log('[Metering startCapture] Tentando iniciar. Fonte:', source);
-        setCurrentMeteringData([]); // Limpa dados anteriores independentemente da fonte
+        setCurrentMeteringData([]);
 
-        if (source === 'mic') {
-            try {
-                if (permissionResponse?.status !== 'granted') {
-                    await requestPermission();
-                }
-                const currentPermissions = await Audio.getPermissionsAsync();
-                if (currentPermissions.status !== 'granted') {
-                    console.warn('Permissão de áudio não concedida.');
-                    Alert.alert(
-                        'Permissão Necessária',
-                        'É necessário conceder permissão ao microfone para iniciar a gravação.'
-                    );
-                    setIsRecordingActive(false); // Garante que não fique ativo
-                    return;
-                }
-
-                await Audio.setAudioModeAsync({
-                    allowsRecordingIOS: true,
-                    playsInSilentModeIOS: true,
-                });
-
-                const { recording: newRecording } = await Audio.Recording.createAsync(
-                    Audio.RecordingOptionsPresets.HIGH_QUALITY,
-                    undefined,
-                    100
-                );
-                setMicRecording(newRecording);
-                setIsRecordingActive(true); // Define como ativo APÓS sucesso na configuração do MIC
-                console.log('[Metering startCapture] Gravação de MIC iniciada.');
-
-                newRecording.setOnRecordingStatusUpdate((status) => {
-                    if (status.isRecording) {
-                        const micValue = status.metering ?? 0;
-                        setCurrentMeteringData((prevData) => {
-                            const newData = [...prevData, micValue];
-                            return newData.length > MAX_DATA_POINTS_CHART
-                                ? newData.slice(newData.length - MAX_DATA_POINTS_CHART)
-                                : newData;
-                        });
-                    }
-                });
-            } catch (err) {
-                console.error('Falha ao iniciar gravação do microfone:', err);
-                Alert.alert('Erro', 'Não foi possível iniciar a gravação do microfone.');
-                setIsRecordingActive(false);
-            }
-        } else {
-            // source === 'ble'
-            console.log(
-                '[Metering startCapture] Verificando bleDevice:',
-                bleDevice ? bleDevice.id : 'Nenhum'
+        if (!bleDevice) {
+            Alert.alert(
+                'Dispositivo BLE Não Conectado',
+                'Por favor, conecte a um dispositivo BLE nas configurações antes de iniciar a captura.'
             );
-            if (!bleDevice) {
-                console.warn(
-                    'Fonte BLE selecionada, mas nenhum dispositivo conectado. Abra as Configurações para conectar.'
-                );
-                Alert.alert(
-                    'Dispositivo BLE Não Conectado',
-                    'Por favor, conecte a um dispositivo BLE nas configurações antes de iniciar a captura.'
-                );
-                // setIsRecordingActive(false) não é estritamente necessário aqui,
-                // pois não o definimos como true ainda para o caso BLE se bleDevice for null.
-                // Mas para garantir, podemos deixar.
-                setIsRecordingActive(false);
-                return;
-            }
-            // Se bleDevice existe, então podemos considerar a gravação BLE como ativa
-            setIsRecordingActive(true);
-            console.log(
-                '[Metering startCapture] Captura BLE iniciada. Aguardando dados via handleSineValueUpdate. isRecordingActive deve ser true agora.'
-            );
+            setIsRecording(false);
+            return;
         }
+
+        setIsRecording(true);
+        console.log('[startCapture] Is recording:', isRecording);
     }
 
     async function stopCapture() {
-        console.log(
-            '[Metering stopCapture] Parando captura. Fonte:',
-            source,
-            'isRecordingActive era:',
-            isRecordingActive
-        );
-        setIsRecordingActive(false);
+        console.log('[Metering stopCapture] Parando captura. ', 'isRecording era:', isRecording);
+        setIsRecording(false);
 
-        if (source === 'mic' && micRecording) {
-            try {
-                await micRecording.stopAndUnloadAsync();
-                const uri = micRecording.getURI();
-                if (uri) setRecordingUri(uri);
-                await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
-                setMicRecording(undefined);
-                console.log('[Metering stopCapture] Gravação de MIC parada.');
-            } catch (err) {
-                console.error('Falha ao parar gravação do microfone:', err);
-            }
-        } else if (source === 'ble') {
-            if (currentMeteringData.length > 0) {
-                setRecordingUri('ble_data');
-            }
-            console.log(
-                '[Metering stopCapture] Captura BLE parada. Dados coletados:',
-                currentMeteringData.length
-            );
+        if (currentMeteringData.length > 0) {
+            setRecordingUri('ble_data');
         }
+        console.log(
+            '[Metering stopCapture] Captura BLE parada. Dados coletados:',
+            currentMeteringData.length
+        );
     }
 
     function handleSaveData() {
-        if (source === 'mic' && !recordingUri) {
-            console.warn('Nenhuma gravação de áudio para salvar.');
-            Alert.alert('Atenção', 'Não há gravação de áudio para salvar.');
-            return;
-        }
-        if (source === 'ble' && currentMeteringData.length === 0) {
+        if (currentMeteringData.length === 0) {
             console.warn('Nenhum dado BLE para salvar.');
             Alert.alert('Atenção', 'Não há dados Bluetooth para salvar.');
             return;
@@ -186,7 +92,7 @@ export default function Metering() {
     }
 
     function handleSettings() {
-        if (isRecordingActive) {
+        if (isRecording) {
             Alert.alert('Atenção', 'Pare a captura atual antes de abrir as configurações.', [
                 { text: 'OK' },
             ]);
@@ -198,42 +104,24 @@ export default function Metering() {
     const handleDeviceConnected = (device: Device) => {
         console.log('[Metering handleDeviceConnected] Dispositivo BLE conectado:', device.name);
         setBleDevice(device);
-        // Opcional: Se a fonte já for BLE, e o usuário acabou de conectar,
-        // poderia dar um feedback ou mudar o estado do botão de play.
-        // Alert.alert("Conectado", `Conectado ao ${device.name}. Agora você pode iniciar a captura BLE.`);
+        Alert.alert(
+            'Conectado',
+            `Conectado ao ${device.name}. Agora você pode iniciar a captura BLE.`
+        );
     };
-
-    // const handleSineValueUpdate = (value: number) => {
-    //     // Este log é crucial para ver o estado no momento da chegada dos dados
-    //     // console.log(
-    //     //     `[Metering handleSineValueUpdate] Valor: ${value}, Fonte: ${source}, Gravando: ${isRecordingActive}`
-    //     // );
-    //     if (source === 'ble') {
-    //         setCurrentMeteringData((prevData) => {
-    //             const newData = [...prevData, value];
-    //             if (newData.length > MAX_DATA_POINTS_CHART) {
-    //                 return newData.slice(newData.length - MAX_DATA_POINTS_CHART);
-    //             }
-    //             return newData;
-    //         });
-    //     }
-    // };
 
     /**
      * Lida com a chegada de um novo "bloco" de amostras de áudio.
      * @param {number[]} newSamples O array de novas amostras recebidas do BLE.
      */
-    const handleSineValueUpdate = (newSamples: number[]) => {
-        // Só atualiza se a captura BLE estiver ativa e a fonte for 'ble'
-        if (source === 'ble') {
-            setCurrentMeteringData((prevData) => {
-                // 1. Concatena os dados antigos com os novos que chegaram
-                const combinedData = [...prevData, ...newSamples];
+    const handleDataStream = (newSamples: number[]) => {
+        if (!isRecordingRef.current) return;
+        setCurrentMeteringData((prevData) => {
+            const combinedData = [...prevData, ...newSamples];
 
-                // 2. Retorna sempre os últimos N elementos, criando a "janela deslizante"
-                return combinedData.slice(-MAX_SAMPLES_IN_WINDOW);
-            });
-        }
+            // Retorna sempre os últimos N elementos, criando a "janela deslizante"
+            return combinedData.slice(-MAX_SAMPLES_IN_WINDOW);
+        });
     };
 
     return (
@@ -252,15 +140,13 @@ export default function Metering() {
                     style={styles.modalButton}
                     onPress={handleSaveData}
                     // Habilita salvar se NÃO estiver gravando E tiver dados, OU se gravou algo (recordingUri para mic)
-                    disabled={
-                        isRecordingActive || (currentMeteringData.length === 0 && !recordingUri)
-                    }
+                    disabled={isRecording || (currentMeteringData.length === 0 && !recordingUri)}
                 >
                     <MaterialIcons
                         name="save"
                         size={24}
                         color={
-                            isRecordingActive || (currentMeteringData.length === 0 && !recordingUri)
+                            isRecording || (currentMeteringData.length === 0 && !recordingUri)
                                 ? 'grey'
                                 : 'white'
                         }
@@ -269,13 +155,9 @@ export default function Metering() {
 
                 <Pressable
                     style={styles.recordButton}
-                    onPress={isRecordingActive ? stopCapture : startCapture}
+                    onPress={isRecording ? stopCapture : startCapture}
                 >
-                    <FontAwesome6
-                        name={isRecordingActive ? 'pause' : 'play'}
-                        size={24}
-                        color="#4dabf7"
-                    />
+                    <FontAwesome6 name={isRecording ? 'pause' : 'play'} size={24} color="#4dabf7" />
                 </Pressable>
 
                 <Pressable style={styles.modalButton} onPress={handleSettings}>
@@ -287,11 +169,6 @@ export default function Metering() {
                 visible={saveModalVisible}
                 onClose={() => setSaveModalVisible(false)}
                 onSave={async ({ patientId, tag, observations }) => {
-                    if (source === 'mic' && !recordingUri) {
-                        console.error('URI da gravação de áudio não encontrada para salvar.');
-                        setSaveModalVisible(false);
-                        return;
-                    }
                     if (currentMeteringData.length === 0) {
                         console.error('Nenhum dado de medição para salvar.');
                         setSaveModalVisible(false);
@@ -304,9 +181,6 @@ export default function Metering() {
                             data: JSON.stringify(currentMeteringData),
                             tag: tag ?? 'blue',
                             observations: observations ?? '',
-                            // Adicionar campos opcionais para diferenciar a origem
-                            // source_type: source,
-                            // audio_uri: source === 'mic' ? recordingUri : null,
                         });
                         console.log('Medição salva com sucesso!');
                         setRecordingUri(null);
@@ -323,26 +197,8 @@ export default function Metering() {
             <SettingsModal
                 visible={settingsModalVisible}
                 onClose={() => setSettingsModalVisible(false)}
-                source={source}
-                onSourceChange={(newSource) => {
-                    console.log(
-                        `[Metering SettingsModal] onSourceChange: de ${source} para ${newSource}. isRecordingActive: ${isRecordingActive}`
-                    );
-                    if (isRecordingActive) {
-                        // Se estava gravando, para a captura antes de mudar a fonte
-                        stopCapture();
-                    }
-                    setSource(newSource);
-                    setCurrentMeteringData([0]);
-                    if (newSource === 'mic') {
-                        console.log(
-                            '[Metering SettingsModal] Mudando para MIC, definindo bleDevice como null.'
-                        );
-                        setBleDevice(null); // Limpa dispositivo BLE se mudou para mic
-                    }
-                }}
                 onDeviceConnected={handleDeviceConnected}
-                onSineValueUpdate={handleSineValueUpdate}
+                handleDataStream={handleDataStream}
             />
         </View>
     );
