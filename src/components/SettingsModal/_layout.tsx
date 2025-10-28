@@ -50,4 +50,8 @@ export const styles = StyleSheet.create({
         borderRadius: 8,
         opacity: 0.5,
     },
+    fonteEntrada: {
+        fontSize: 18,
+        marginVertical: 10,
+    },
 });

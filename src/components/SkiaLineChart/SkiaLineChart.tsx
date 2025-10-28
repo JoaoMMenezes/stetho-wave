@@ -1,169 +1,184 @@
-import React, { useRef, useEffect, useState } from 'react';
-import { View, ScrollView, Text, Modal, TouchableOpacity, Button, Dimensions } from 'react-native';
-import { Canvas, Path, Skia, Text as SkiaText, useFont, Line } from '@shopify/react-native-skia';
+import React, { useEffect, useState, useMemo } from 'react';
+import { View, Text, Modal, TouchableOpacity, Button, Dimensions } from 'react-native';
+import { Canvas, Path, Skia, useFont, Line, Text as SkiaText } from '@shopify/react-native-skia';
 import * as ScreenOrientation from 'expo-screen-orientation';
-import { styles } from './_layout';
+import { styles } from './_layout'; // Seus estilos
 
 interface SkiaLineChartProps {
     data: number[];
     height?: number;
-    padding?: number;
+    // O padding agora é gerenciado internamente, então podemos simplificar as props
     fullscreenEnabled?: boolean;
+}
+
+// A função de downsampling que criamos anteriormente continua útil
+function downsampleData(data: number[], targetPoints: number): number[] {
+    if (data.length <= targetPoints || targetPoints <= 0) {
+        return data;
+    }
+    const downsampled = [];
+    const bucketSize = data.length / targetPoints;
+    for (let i = 0; i < targetPoints; i++) {
+        const bucketStart = Math.floor(i * bucketSize);
+        const bucketEnd = Math.floor((i + 1) * bucketSize);
+        const bucket = data.slice(bucketStart, bucketEnd);
+        if (bucket.length === 0) continue;
+        let peak = bucket[0];
+        for (let j = 1; j < bucket.length; j++) {
+            if (Math.abs(bucket[j]) > Math.abs(peak)) {
+                peak = bucket[j];
+            }
+        }
+        downsampled.push(peak);
+    }
+    return downsampled;
 }
 
 export default function SkiaLineChart({
     data,
     height = 300,
-    padding = 40,
     fullscreenEnabled = false,
 }: SkiaLineChartProps) {
-    const scrollViewRef = useRef<ScrollView>(null);
-    const font = useFont(require('../../../assets/fonts/SpaceMono-Regular.ttf'), 12);
+    const font = useFont(require('../../../assets/fonts/SpaceMono-Regular.ttf'), 10); // Ajuste o tamanho da fonte se necessário
     const [fullscreen, setFullscreen] = useState(false);
 
-    useEffect(() => {
-        scrollViewRef.current?.scrollToEnd({ animated: true });
-    }, [data]);
+    const renderChart = (renderHeight: number) => {
+        // --- Definição da Área do Gráfico ---
+        const PADDING_TOP = 20;
+        const PADDING_BOTTOM = 30;
+        const PADDING_LEFT = 40;
+        const PADDING_RIGHT = 20;
 
-    // Controle de orientação em fullscreen
-    useEffect(() => {
-        if (!fullscreenEnabled || !fullscreen) return;
-        (async () => {
-            await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE_RIGHT);
-        })();
+        const screenWidth = Dimensions.get('window').width;
 
-        // get height of screen when in fullscreen
-        const dimensions = Dimensions.get('window');
-        const newHeight = dimensions.height;
-        if (newHeight !== height) {
-            height = newHeight;
+        const canvasWidth = screenWidth * 0.8;
+        const canvasHeight = renderHeight;
+
+        const chartWidth = canvasWidth - PADDING_LEFT - PADDING_RIGHT;
+        const chartHeight = canvasHeight - PADDING_TOP - PADDING_BOTTOM;
+
+        const yAxisMax = 2.0;
+        const linesOffset = 1;
+
+        const processedData = useMemo(
+            () => downsampleData(data, Math.floor(chartWidth)),
+            [data, chartWidth]
+        );
+
+        const valueToY = (value: number) => {
+            const chartZeroY = PADDING_TOP + chartHeight / 2;
+            return chartZeroY - (value / yAxisMax) * (chartHeight / 2);
+        };
+
+        const path = useMemo(() => {
+            if (processedData.length < 2) return Skia.Path.Make();
+            const newPath = Skia.Path.Make();
+            const scaleX = chartWidth / (processedData.length - 1);
+            newPath.moveTo(PADDING_LEFT, valueToY(processedData[0]));
+            processedData.forEach((value, index) => {
+                if (index > 0) {
+                    newPath.lineTo(PADDING_LEFT + index * scaleX, valueToY(value));
+                }
+            });
+            return newPath;
+        }, [processedData, chartWidth]);
+
+        const yAxisLabels = [];
+        for (let i = yAxisMax; i >= -yAxisMax; i -= linesOffset) {
+            yAxisLabels.push(i);
         }
 
-        return () => {
-            ScreenOrientation.unlockAsync();
-        };
-    }, [fullscreen, fullscreenEnabled]);
+        const xAxisLabels = [];
+        const numLabelsX = 5;
+        for (let i = 0; i < numLabelsX; i++) {
+            const dataIndex = Math.floor((data.length / (numLabelsX - 1)) * i);
+            const xPos = PADDING_LEFT + (chartWidth / (numLabelsX - 1)) * i;
+            xAxisLabels.push({ text: `${dataIndex}`, x: xPos });
+        }
+        if (xAxisLabels.length > 0) {
+            xAxisLabels[xAxisLabels.length - 1] = {
+                text: `${data.length - 1}`,
+                x: PADDING_LEFT + chartWidth,
+            };
+        }
 
-    if (!font) return null;
+        if (!font || data.length < 2) {
+            return (
+                <View
+                    style={{ height: canvasHeight, alignSelf: 'center', justifyContent: 'center' }}
+                >
+                    <Text>Aguardando dados suficientes...</Text>
+                </View>
+            );
+        }
 
-    const pointSpacing = 4;
-    const maxY = Math.max(...data);
-    const width = data.length * pointSpacing + padding * 2; // chart width
+        return (
+            <Canvas style={{ width: canvasWidth, height: canvasHeight }}>
+                {/* Eixo Y vertical */}
+                <Line
+                    p1={{ x: PADDING_LEFT, y: PADDING_TOP }}
+                    p2={{ x: PADDING_LEFT, y: PADDING_TOP + chartHeight }}
+                    color="grey"
+                    strokeWidth={1}
+                />
 
-    const points = translateDataToPoints(data as number[]);
-    const path = Skia.Path.Make();
+                {/* NOVO: Label de unidade do Eixo Y (Pascal) */}
+                <SkiaText
+                    x={PADDING_LEFT - 35}
+                    y={PADDING_TOP - 10}
+                    text="(Pa)"
+                    font={font}
+                    color="grey"
+                />
 
-    if (points.length > 0) {
-        path.moveTo(points[0].x, points[0].y);
-        points.slice(1).forEach((p) => path.lineTo(p.x, p.y));
-    }
+                {/* Linhas Guia Horizontais e Labels do Eixo Y */}
+                {yAxisLabels.map((label, index) => {
+                    const y = valueToY(label);
 
-    function translateDataToPoints(data: number[]) {
-        const maxY = Math.max(...data);
+                    // ALTERAÇÃO: Condicional para destacar a linha do zero
+                    const isZeroAxis = label === 0;
+                    const lineColor = isZeroAxis ? '#999999' : '#e0e0e0'; // Cinza mais escuro para o eixo zero
+                    const lineWidth = isZeroAxis ? 1 : 0.5;
 
-        return data.map((value, index) => ({
-            x: index * pointSpacing + padding,
-            y: (value / maxY) * (height - padding * 2) + padding,
-        }));
-    }
-
-    const renderChart = (graphHeight: number) => (
-        <View style={styles.chartContainer}>
-            {/* Label y fixa */}
-            <View
-                style={[
-                    styles.yAxis,
-                    {
-                        width: 40,
-                        height: graphHeight,
-                        paddingTop: padding / 2,
-                        paddingBottom: padding,
-                        justifyContent: 'space-around',
-                    },
-                ]}
-            >
-                {Array.from({ length: Math.floor(maxY / 20) + 1 }, (_, i) => {
-                    const value = (Math.floor(maxY / 20) - i) * 20;
                     return (
-                        <View key={`y-label-${i}`}>
-                            <Text>{value}</Text>
-                        </View>
+                        <React.Fragment key={index}>
+                            <Line
+                                p1={{ x: PADDING_LEFT, y }}
+                                p2={{ x: PADDING_LEFT + chartWidth, y }}
+                                color={lineColor}
+                                strokeWidth={lineWidth}
+                            />
+                            <SkiaText
+                                x={PADDING_LEFT - 35}
+                                y={y + 4}
+                                text={label.toFixed(2)}
+                                font={font}
+                                color="grey"
+                            />
+                        </React.Fragment>
                     );
                 })}
-            </View>
 
-            <ScrollView
-                horizontal
-                ref={scrollViewRef}
-                contentContainerStyle={[styles.scrollViewContent, { width, height: graphHeight }]}
-            >
-                <Canvas style={styles.canvas}>
-                    {/* Grades horizontais */}
-                    {Array.from({ length: Math.floor(maxY / 20) + 1 }, (_, i) => {
-                        const value = i * 20;
-                        const y =
-                            graphHeight - ((value / maxY) * (graphHeight - padding * 2) + padding);
-                        return (
-                            <Line
-                                key={`grid-h-${i}`}
-                                p1={{ x: padding, y }}
-                                p2={{ x: width - padding, y }}
-                                color="#e0e0e0"
-                                strokeWidth={1}
-                            />
-                        );
-                    })}
-
-                    {/* Grades verticais */}
-                    {points
-                        .filter((_, i) => i % 20 === 0)
-                        .map((p, i) => (
-                            <Line
-                                key={`grid-v-${i}`}
-                                p1={{ x: p.x, y: padding }}
-                                p2={{ x: p.x, y: graphHeight - padding }}
-                                color="#e0e0e0"
-                                strokeWidth={1}
-                            />
-                        ))}
-
-                    {/* Eixos */}
-                    <Line
-                        p1={{ x: padding, y: graphHeight - padding }}
-                        p2={{ x: width - padding, y: graphHeight - padding }}
-                        color="black"
-                        strokeWidth={2}
+                {/* Labels do Eixo X */}
+                {xAxisLabels.map((label, index) => (
+                    <SkiaText
+                        key={index}
+                        x={label.x - 10}
+                        y={PADDING_TOP + chartHeight + 20}
+                        text={label.text}
+                        font={font}
+                        color="grey"
                     />
-                    <Line
-                        p1={{ x: padding, y: padding }}
-                        p2={{ x: padding, y: graphHeight - padding }}
-                        color="black"
-                        strokeWidth={2}
-                    />
+                ))}
 
-                    {/* Linha de dados */}
-                    <Path path={path} color="blue" style="stroke" strokeWidth={2} />
-
-                    {/* Labels X */}
-                    {points
-                        .filter((_, i) => i % 20 === 0)
-                        .map((p, i) => (
-                            <SkiaText
-                                key={`x-label-${i}`}
-                                x={p.x - 10}
-                                y={graphHeight - padding + 20}
-                                text={`${i * 20 || 0}`}
-                                font={font}
-                                color="black"
-                            />
-                        ))}
-                </Canvas>
-            </ScrollView>
-        </View>
-    );
+                {/* Path Principal com os dados */}
+                <Path path={path} color="#6A5ACD" style="stroke" strokeWidth={2} />
+            </Canvas>
+        );
+    };
 
     return (
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
             {fullscreenEnabled && (
                 <View style={styles.fullscreenHeader}>
                     <TouchableOpacity onPress={() => setFullscreen(true)}>

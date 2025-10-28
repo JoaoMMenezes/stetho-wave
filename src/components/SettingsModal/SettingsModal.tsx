@@ -10,81 +10,85 @@ import {
     Switch,
     ActivityIndicator,
 } from 'react-native';
-import { BleManager, Device } from 'react-native-ble-plx';
-import { Base64 } from 'js-base64';
-import { styles } from './_layout';
+import { BleManager, Device, Characteristic } from 'react-native-ble-plx'; // Import Characteristic
+import { Base64 } from 'js-base64'; // js-base64 para decodificar
+import { styles } from './_layout'; // Supondo que seus estilos estão aqui
 import { MaterialIcons } from '@expo/vector-icons';
-import { defaultTheme } from '@/themes/default';
+import { defaultTheme } from '@/themes/default'; // Supondo que seu tema está aqui
+import { requestPermissions } from '@/utils/bleUtils';
+import { convertInt16SampleToPascal } from '@/utils/audioUtils';
 
 interface SettingsModalProps {
     visible: boolean;
     onClose: () => void;
-    source: 'mic' | 'ble';
-    onSourceChange: (source: 'mic' | 'ble') => void;
-    onConnect: (device: Device, characteristicUUID: string) => void;
+    onDeviceConnected: (device: Device) => void;
+    handleDataStream: (newSamples: number[]) => void;
+    handleRawAudioStream: (rawSamples: number[]) => void;
 }
 
+// UUIDs do seu ESP32 (conforme o firmware da senoide)
 const SERVICE_UUID = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';
-const BOX_CHARACTERISTIC_UUID = 'beb5483e-36e1-4688-b7f5-ea07361b26a8';
+const CHARACTERISTIC_UUID = 'beb5483e-36e1-4688-b7f5-ea07361b26a8'; // Renomeado para clareza
+const TARGET_DEVICE_NAME = 'ESP32_Audio_Stream'; // Nome do seu dispositivo ESP32
 
+// Instância única do BleManager
 const bleManager = new BleManager();
 
 export default function SettingsModal({
     visible,
     onClose,
-    source,
-    onSourceChange,
-    onConnect,
+    onDeviceConnected,
+    handleDataStream,
+    handleRawAudioStream,
 }: SettingsModalProps) {
     const [connectedDevice, setConnectedDevice] = useState<Device | null>(null);
     const [isConnected, setIsConnected] = useState(false);
-    const [boxValue, setBoxValue] = useState(0);
+    const [lastSampleValue, setLastSampleValue] = useState(0);
     const [isLoading, setIsLoading] = useState(false);
     const [isScanning, setIsScanning] = useState(false);
 
+    // Efeito para lidar com a desconexão do dispositivo
     useEffect(() => {
-        return () => {
-            bleManager.destroy(); // limpa recursos ao desmontar
-        };
-    }, []);
-
-    /**
-     * Solicita permissões necessárias para BLE no Android
-     * @returns true se as permissões foram concedidas, false caso contrário
-     */
-    async function requestPermissions() {
-        if (Platform.OS === 'android') {
-            const granted = await PermissionsAndroid.requestMultiple([
-                PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
-                PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
-                PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-            ]);
-            return Object.values(granted).every((v) => v === 'granted');
+        if (connectedDevice) {
+            const subscription = bleManager.onDeviceDisconnected(
+                connectedDevice.id,
+                (error, device) => {
+                    if (error) {
+                        console.warn('Erro na desconexão:', error);
+                    }
+                    console.log('Dispositivo desconectado:', device?.name);
+                    setIsConnected(false);
+                    setConnectedDevice(null);
+                    setLastSampleValue(0);
+                }
+            );
+            return () => subscription.remove();
         }
-        return true;
-    }
+    }, [connectedDevice]);
 
     /**
      * Conecta ao dispositivo BLE e inicia o monitoramento do valor recebido
      */
-    async function connectToDevice() {
-        console.log('Conectando ao dispositivo...');
+    async function connectAndMonitorDevice() {
+        console.log('Tentando conectar ao dispositivo...');
         if (isConnected || isScanning) {
-            console.warn('Já conectado ou escaneando');
+            console.warn('Já conectado ou escaneando.');
             return;
         }
 
-        const permission = await requestPermissions();
-        if (!permission) return;
-
-        console.log('Permissões concedidas');
+        const permissionsGranted = await requestPermissions();
+        if (!permissionsGranted) {
+            console.warn('Permissões não concedidas. Não é possível escanear.');
+            setIsLoading(false);
+            setIsScanning(false);
+            return;
+        }
+        console.log('Permissões concedidas.');
 
         setIsScanning(true);
         setIsLoading(true);
 
         bleManager.startDeviceScan(null, null, async (error, device) => {
-            console.log('Escaneando dispositivos...');
-
             if (error) {
                 console.warn('Erro ao escanear:', error);
                 bleManager.stopDeviceScan();
@@ -95,83 +99,134 @@ export default function SettingsModal({
 
             console.log('Dispositivo encontrado:', device?.name, device?.id);
 
-            if (device?.name === 'ESP32_Box') {
+            if (device?.name === TARGET_DEVICE_NAME) {
+                console.log(`Dispositivo alvo ${TARGET_DEVICE_NAME} encontrado!`);
                 bleManager.stopDeviceScan();
                 setIsScanning(false);
+
                 try {
-                    const alreadyConnected = await bleManager.isDeviceConnected(device.id);
-                    const connected = alreadyConnected ? device : await device.connect();
+                    console.log('Conectando a:', device.name);
+                    // Nota: device.connect() pode demorar. O estado isLoading já está true.
+                    const connectedDev = await device.connect();
+                    console.log('Conectado com sucesso a:', connectedDev.name);
 
-                    const connectAlready = await bleManager.isDeviceConnected(device.id);
-                    console.log('connectAlready?', connectAlready);
+                    // Solicita um MTU maior para otimizar a transferência de dados. 517 é o máximo para ESP32.
+                    try {
+                        await connectedDev.requestMTU(517);
+                        console.log('MTU negociado com sucesso.');
+                    } catch (mtuError) {
+                        console.warn('Falha ao negociar MTU:', mtuError);
+                    }
 
-                    await connected.discoverAllServicesAndCharacteristics();
-                    setConnectedDevice(connected);
+                    setConnectedDevice(connectedDev); // Armazena o objeto do dispositivo conectado
                     setIsConnected(true);
-                    onConnect(device, BOX_CHARACTERISTIC_UUID);
+                    setIsLoading(false); // Conexão estabelecida, para o loading principal
 
-                    // leitura inicial
-                    const char = await connected.readCharacteristicForService(
-                        SERVICE_UUID,
-                        BOX_CHARACTERISTIC_UUID
-                    );
-                    const value = parseInt(Base64.decode(char?.value || '0'));
-                    setBoxValue(value);
+                    console.log('Descobrindo serviços e características...');
+                    await connectedDev.discoverAllServicesAndCharacteristics();
+                    console.log('Serviços e características descobertos.');
 
-                    // monitoramento
-                    connected.monitorCharacteristicForService(
+                    // Notificar o componente pai sobre a conexão
+                    onDeviceConnected(connectedDev);
+
+                    // Monitorar a característica para atualizações da senoide
+                    console.log('Iniciando monitoramento da característica...');
+                    const subscriptionId = `monitor-${CHARACTERISTIC_UUID}`; // ID único para a transação
+                    const subscription = connectedDev.monitorCharacteristicForService(
                         SERVICE_UUID,
-                        BOX_CHARACTERISTIC_UUID,
-                        (error, characteristic) => {
-                            if (error) {
-                                console.warn('Erro no monitoramento:', error);
+                        CHARACTERISTIC_UUID,
+                        (err, characteristic) => {
+                            if (err) {
+                                console.warn('Erro no monitoramento:', err.message);
                                 return;
                             }
+
                             if (characteristic?.value) {
-                                const updatedValue = parseInt(Base64.decode(characteristic.value));
-                                setBoxValue(updatedValue);
-                                console.log('Valor atualizado:', updatedValue);
+                                // 1. DECODIFICAR OS DADOS PARA UM ARRAY DE INTEIROS DE 16-BIT
+                                const byteArray = Base64.toUint8Array(characteristic.value);
+                                const dataView = new DataView(byteArray.buffer);
+                                const int16Samples = [];
+
+                                try {
+                                    // Lê o buffer de 2 em 2 bytes para obter os inteiros
+                                    for (let i = 0; i < dataView.byteLength; i += 2) {
+                                        const sample = dataView.getInt16(i, true);
+                                        int16Samples.push(sample);
+                                    }
+                                } catch (e) {
+                                    console.error('Erro ao processar os dados recebidos:', e);
+                                }
+
+                                // 2. CONVERTER OS DADOS DE int16 PARA PASCAL
+                                const pascalSamples = int16Samples.map((sample) =>
+                                    convertInt16SampleToPascal(sample)
+                                );
+
+                                // 3. ENVIAR DADOS CONVERTIDOS (PASCAL) PARA O GRÁFICO
+                                if (pascalSamples.length > 0) {
+                                    handleDataStream(pascalSamples);
+
+                                    // (Bônus: Atualiza o valor de amostra no modal)
+                                    setLastSampleValue(pascalSamples[pascalSamples.length - 1]);
+                                }
+
+                                // 4. ENVIAR DADOS BRUTOS (INT16) PARA A GRAVAÇÃO DE ÁUDIO
+                                if (int16Samples.length > 0) {
+                                    handleRawAudioStream(int16Samples); // <-- ADICIONE ESTA LINHA
+                                }
                             }
                         },
-                        'monitor-box'
+                        `monitor-${CHARACTERISTIC_UUID}` // ID da transação
                     );
-                } catch (err) {
-                    console.error('Erro na conexão:', err);
+                    console.log(`Monitoramento iniciado com ID: ${subscriptionId}`);
+                } catch (connectionError) {
+                    console.error('Erro na conexão ou descoberta:', connectionError);
+                    setIsLoading(false); // Para o loading em caso de erro
+                    setIsConnected(false);
+                    setConnectedDevice(null);
+                    // Tentar limpar se o device foi parcialmente conectado
+                    if (device) {
+                        try {
+                            await bleManager.cancelDeviceConnection(device.id);
+                        } catch (cancelError) {
+                            console.error('Erro ao cancelar conexão após falha:', cancelError);
+                        }
+                    }
                 }
-                setIsLoading(false);
             }
         });
 
-        // timeout
         setTimeout(() => {
-            bleManager.stopDeviceScan();
-            setIsScanning(false);
-            setIsLoading(false);
-        }, 30000);
+            if (isScanning) {
+                // Só para o scan se ainda estiver escaneando
+                console.log('Timeout do scan, parando o scan.');
+                bleManager.stopDeviceScan();
+                setIsScanning(false);
+                if (isLoading && !isConnected) {
+                    // Se estava carregando e não conectou
+                    setIsLoading(false);
+                }
+            }
+        }, 15000);
     }
 
     async function disconnectFromDevice() {
+        console.log('Tentando desconectar...');
         if (connectedDevice) {
-            await bleManager.cancelTransaction('monitor-box');
-            await bleManager.cancelDeviceConnection(connectedDevice.id);
-            setConnectedDevice(null);
-            setIsConnected(false);
+            try {
+                await connectedDevice.cancelConnection();
+                console.log('Desconexão solicitada para:', connectedDevice.name);
+            } catch (error) {
+                console.error('Erro ao desconectar:', error);
+            } finally {
+                setConnectedDevice(null);
+                setIsConnected(false);
+                setLastSampleValue(0);
+            }
+        } else {
+            console.log('Nenhum dispositivo conectado para desconectar.');
         }
-    }
-
-    async function toggleBoxValue() {
-        if (!connectedDevice) return;
-
-        const newValue = boxValue === 0 ? 1 : 0;
-
-        await bleManager.writeCharacteristicWithResponseForDevice(
-            connectedDevice.id,
-            SERVICE_UUID,
-            BOX_CHARACTERISTIC_UUID,
-            Base64.encode(newValue.toString())
-        );
-
-        setBoxValue(newValue);
+        setIsLoading(false);
     }
 
     return (
@@ -189,49 +244,42 @@ export default function SettingsModal({
                         </Pressable>
                     </View>
 
-                    <Text style={{ fontSize: 18, marginVertical: 10 }}>Fonte de entrada</Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
-                        <Text>Microfone</Text>
-                        <Switch
-                            value={source === 'ble'}
-                            onValueChange={(val) => onSourceChange(val ? 'ble' : 'mic')}
-                            style={{ marginHorizontal: 10 }}
-                        />
-                        <Text>Bluetooth</Text>
-                    </View>
+                    {isLoading && (
+                        <View style={{ alignItems: 'center', marginVertical: 20 }}>
+                            <ActivityIndicator size="large" color={defaultTheme.colors.primary} />
+                            <Text style={{ marginTop: 10 }}>
+                                {isScanning ? 'Procurando ESP32...' : 'Conectando...'}
+                            </Text>
+                        </View>
+                    )}
 
-                    {isLoading ? (
-                        <ActivityIndicator
-                            style={styles.activtyIndicator}
-                            size="large"
-                            color="white"
-                        />
-                    ) : isConnected ? (
+                    {!isLoading && isConnected && connectedDevice && (
                         <View style={styles.connectedInfo}>
-                            <Text>Dispositivo conectado</Text>
-                            <Text>Valor atual: {boxValue}</Text>
-                            <View
+                            <Text style={{ fontWeight: 'bold' }}>
+                                Conectado a: {connectedDevice.name}
+                            </Text>
+                            <Text
                                 style={{
-                                    flexDirection: 'row',
-                                    alignItems: 'center',
-                                    marginTop: 10,
+                                    fontSize: 18,
+                                    marginVertical: 10,
                                 }}
                             >
-                                <Text>Alternar valor:</Text>
-                                <Switch
-                                    value={boxValue === 1}
-                                    onValueChange={toggleBoxValue}
-                                    style={{ marginLeft: 10 }}
-                                />
-                            </View>
-                            <Button title="Desconectar" onPress={disconnectFromDevice} />
+                                Valor: {lastSampleValue.toFixed(2)}
+                            </Text>
+                            <Button
+                                title="Desconectar do ESP32"
+                                onPress={disconnectFromDevice}
+                                color={defaultTheme.colors.error}
+                            />
                         </View>
-                    ) : (
+                    )}
+
+                    {!isLoading && !isConnected && (
                         <Button
                             title="Conectar ao ESP32"
-                            onPress={() => {
-                                connectToDevice();
-                            }}
+                            onPress={connectAndMonitorDevice}
+                            disabled={isScanning || isLoading}
+                            color={defaultTheme.colors.primary}
                         />
                     )}
                 </View>
