@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
     Modal,
     View,
@@ -10,6 +10,7 @@ import {
     KeyboardAvoidingView,
     Platform,
     SafeAreaView,
+    Alert,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { styles } from './_layout';
@@ -18,6 +19,7 @@ import DropDownPicker from 'react-native-dropdown-picker';
 import { usePatientDatabase, Patient } from '@/database/usePatientDatabase';
 import { Metering } from '@/database/useMeteringDatabase';
 import { defaultTheme } from '@/themes/default';
+import { Audio } from 'expo-av';
 
 interface MeteringModalProps {
     visible: boolean;
@@ -27,9 +29,16 @@ interface MeteringModalProps {
         observations: string;
         tag: 'red' | 'green' | 'blue';
     }) => void;
+
+    // --- Nossas Props Unificadas ---
+
+    // Para novas gravações (da tela Metering)
     graphData?: number[];
+    sound?: Audio.Sound | null;
+
+    // Para gravações existentes (da tela Home)
     initialData?: Metering;
-    patientId?: number;
+    patientId?: number; // Para o caso de vir de PatientProfileModal
     isEditing?: boolean;
 }
 
@@ -38,6 +47,7 @@ export default function MeteringModal({
     onClose,
     onSave,
     graphData,
+    sound, // Prop da tela Metering
     initialData,
     patientId,
     isEditing = true,
@@ -51,6 +61,8 @@ export default function MeteringModal({
 
     const [selectedTag, setSelectedTag] = useState<'red' | 'green' | 'blue'>('blue');
     const [isEditingInternal, setIsEditingInternal] = useState(isEditing);
+
+    const [internalSound, setInternalSound] = useState<Audio.Sound | null>(null);
 
     const screenDimensions = Dimensions.get('window');
 
@@ -67,18 +79,61 @@ export default function MeteringModal({
             fetchPatients();
 
             if (initialData) {
+                // Modo "Visualização/Edição" (Vindo da Home)
                 setSelectedPatientId(initialData.patient_id);
                 setObservations(initialData.observations || '');
                 setSelectedTag(initialData.tag);
-                setIsEditingInternal(isEditing);
+                setIsEditingInternal(isEditing); // 'isEditing' será 'false' da Home
             } else {
+                // Modo "Nova Gravação" (Vindo da Metering)
                 setSelectedPatientId(patientId ?? null);
                 setObservations('');
                 setSelectedTag('blue');
-                setIsEditingInternal(true);
+                setIsEditingInternal(true); // Sempre editável ao criar
             }
         }
-    }, [visible]);
+    }, [visible, initialData, isEditing, patientId]);
+
+    // Efeito para carregar e descarregar o áudio
+    useEffect(() => {
+        const loadSound = async () => {
+            if (!visible) return;
+
+            if (sound) {
+                // 1. Se recebemos um som pré-carregado (da tela Metering), usamos ele
+                setInternalSound(sound);
+
+                // ### ESTA É A CORREÇÃO ###
+            } else if (initialData?.audio_uri) {
+                // 2. Se recebemos initialData (da Home), carregamos o som da URI
+                try {
+                    await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+                    const { sound: newSound } = await Audio.Sound.createAsync({
+                        uri: initialData.audio_uri, // Usar initialData.audio_uri
+                    });
+                    setInternalSound(newSound);
+                } catch (error) {
+                    console.error('Erro ao carregar áudio no modal:', error);
+                    Alert.alert('Erro', 'Não foi possível carregar o áudio.');
+                }
+            }
+        };
+
+        loadSound();
+
+        // Função de limpeza
+        return () => {
+            if (internalSound) {
+                // Só descarrega o som se ele foi carregado INTERNAMENTE (via URI)
+                if (!sound && internalSound.unloadAsync) {
+                    console.log('Descarregando áudio interno do modal');
+                    internalSound.unloadAsync();
+                }
+                setInternalSound(null);
+            }
+        };
+        // ### ATUALIZE AS DEPENDÊNCIAS ###
+    }, [visible, sound, initialData]);
 
     const handleSave = () => {
         if (!selectedPatientId) {
@@ -95,7 +150,22 @@ export default function MeteringModal({
         setIsEditingInternal(false);
     };
 
-    const chartDataToShow = initialData?.data ? JSON.parse(initialData?.data) : graphData;
+    // Ela decide qual gráfico mostrar
+    const chartDataToShow = useMemo(() => {
+        if (initialData?.data) {
+            // Caso 1: Vindo da Home, parseia o JSON
+            try {
+                return JSON.parse(initialData.data);
+            } catch (e) {
+                return [0];
+            }
+        }
+        if (graphData) {
+            // Caso 2: Vindo da Metering, usa a prop direta
+            return graphData;
+        }
+        return [0]; // Default
+    }, [initialData, graphData]);
 
     function getTagIcon(tag: string) {
         switch (tag) {
@@ -157,11 +227,11 @@ export default function MeteringModal({
                         editable={isEditingInternal}
                     />
 
-                    {chartDataToShow && (
+                    {chartDataToShow && chartDataToShow.length > 0 && (
                         <>
                             <View style={styles.graphHeader}>
                                 <Text style={styles.sectionTitle}>Gráfico da Ausculta</Text>
-
+                                {/* ... (Seu seletor de Tags - Ótimo) ... */}
                                 <View
                                     style={[
                                         styles.tagButtonGroup,
@@ -194,14 +264,21 @@ export default function MeteringModal({
                                     data={chartDataToShow}
                                     fullscreenEnabled={true}
                                     height={screenDimensions.height * 0.4}
-                                    padding={screenDimensions.width * 0.05}
                                 />
                             </View>
 
-                            <View style={styles.audioProgress}>
-                                <MaterialIcons name="play-arrow" size={24} color="white" />
-                                <View style={styles.progressBar} />
-                            </View>
+                            {/* BOTÃO DE PLAY (Sua lógica está ótima) */}
+                            {internalSound && (
+                                <Pressable
+                                    style={styles.audioProgress}
+                                    onPress={async () => {
+                                        console.log('Reproduzindo som do modal...');
+                                        await internalSound.replayAsync();
+                                    }}
+                                >
+                                    <MaterialIcons name="play-arrow" size={24} color="white" />
+                                </Pressable>
+                            )}
                         </>
                     )}
 

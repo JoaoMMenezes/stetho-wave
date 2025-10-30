@@ -5,6 +5,7 @@ export type Metering = {
     patient_id: number;
     date: string;
     data: string;
+    audio_uri?: string;
     tag: 'red' | 'green' | 'blue';
     observations?: string;
 };
@@ -14,8 +15,8 @@ export function useMeteringDatabase() {
 
     async function create(metering: Omit<Metering, 'id'>) {
         const statement = await database.prepareAsync(`
-            INSERT INTO metering (patient_id, date, data, tag, observations)
-            VALUES ($patient_id, $date, $data, $tag, $observations)
+            INSERT INTO metering (patient_id, date, data, tag, observations, audio_uri)
+            VALUES ($patient_id, $date, $data, $tag, $observations, $audio_uri)
         `);
 
         try {
@@ -25,6 +26,7 @@ export function useMeteringDatabase() {
                 $data: JSON.stringify(metering.data),
                 $tag: metering.tag,
                 $observations: metering.observations ?? null,
+                $audio_uri: metering.audio_uri ?? null,
             });
 
             return result.lastInsertRowId.toLocaleString();

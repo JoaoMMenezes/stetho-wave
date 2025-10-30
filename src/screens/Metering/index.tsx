@@ -33,7 +33,7 @@ export default function Metering() {
     const { getAll } = usePatientDatabase();
 
     const [patients, setPatients] = useState<Patient[]>([]);
-    const [recordingUri, setRecordingUri] = useState<string | null>(null);
+    const [recordingUri, setRecordingUri] = useState<string | undefined>(undefined);
     const [saveModalVisible, setSaveModalVisible] = useState(false);
     const [settingsModalVisible, setSettingsModalVisible] = useState(false);
     const [bleDevice, setBleDevice] = useState<Device | null>(null);
@@ -114,7 +114,7 @@ export default function Metering() {
             }
         } else {
             console.log('Nenhum dado de áudio para processar.');
-            setRecordingUri(null); // Garante que a URI antiga seja limpa
+            setRecordingUri(undefined); // Garante que a URI antiga seja limpa
         }
 
         console.log(
@@ -232,6 +232,9 @@ export default function Metering() {
 
             <MeteringModal
                 visible={saveModalVisible}
+                sound={sound}
+                graphData={fullRecordingDataRef.current}
+                isEditing={true}
                 onClose={() => setSaveModalVisible(false)}
                 onSave={async ({ patientId, tag, observations }) => {
                     if (fullRecordingDataRef.current.length === 0) {
@@ -244,11 +247,12 @@ export default function Metering() {
                             patient_id: patientId,
                             date: new Date().toISOString(),
                             data: JSON.stringify(fullRecordingDataRef.current),
+                            audio_uri: recordingUri,
                             tag: tag ?? 'blue',
                             observations: observations ?? '',
                         });
                         console.log('Medição salva com sucesso!');
-                        setRecordingUri(null);
+                        setRecordingUri(undefined);
                         setCurrentMeteringData([0]);
                         setSaveModalVisible(false);
                         fullRecordingDataRef.current = [];
@@ -261,7 +265,6 @@ export default function Metering() {
                         Alert.alert('Erro', 'Falha ao salvar a medição.');
                     }
                 }}
-                graphData={currentMeteringData}
             />
 
             <SettingsModal

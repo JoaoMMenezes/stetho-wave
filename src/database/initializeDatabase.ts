@@ -26,6 +26,7 @@ export async function initializeDatabase(database: SQLiteDatabase) {
             patient_id INTEGER NOT NULL,
             date TEXT NOT NULL,
             data TEXT NOT NULL,
+            audio_uri TEXT,
             observations TEXT,
             tag TEXT CHECK (tag IN ('red', 'green', 'blue')),
             FOREIGN KEY (patient_id) REFERENCES patient(id) ON DELETE CASCADE
