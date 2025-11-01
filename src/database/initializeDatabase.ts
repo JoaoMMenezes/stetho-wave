@@ -2,9 +2,9 @@ import { type SQLiteDatabase } from 'expo-sqlite';
 import { dummyPatients, dummyMeterings } from './dummyData';
 
 export async function initializeDatabase(database: SQLiteDatabase) {
-    const testingFlag = false;
+    const resetDatabase = false;
 
-    if (testingFlag) {
+    if (resetDatabase) {
         await database.execAsync(`DROP TABLE IF EXISTS metering;`);
         await database.execAsync(`DROP TABLE IF EXISTS patient;`);
     }
@@ -26,13 +26,14 @@ export async function initializeDatabase(database: SQLiteDatabase) {
             patient_id INTEGER NOT NULL,
             date TEXT NOT NULL,
             data TEXT NOT NULL,
+            audio_uri TEXT,
             observations TEXT,
             tag TEXT CHECK (tag IN ('red', 'green', 'blue')),
             FOREIGN KEY (patient_id) REFERENCES patient(id) ON DELETE CASCADE
         );
     `);
 
-    if (testingFlag) {
+    if (resetDatabase) {
         // Inserir pacientes
         dummyPatients.forEach(async (patient) => {
             await database.runAsync(
@@ -45,19 +46,6 @@ export async function initializeDatabase(database: SQLiteDatabase) {
                     patient.address,
                     patient.observations,
                 ]
-            );
-        });
-
-        // Buscar os IDs dos pacientes inseridos
-        const patients = (await database.getAllAsync(`SELECT id FROM patient`)) as { id: number }[];
-
-        // Inserir medições associando com os pacientes
-        dummyMeterings.forEach(async (metering) => {
-            const patientId = patients[metering.patientIndex].id;
-            await database.runAsync(
-                `INSERT INTO metering (patient_id, date, data, observations, tag)
-         VALUES (?, ?, ?, ?, ?)`,
-                [patientId, metering.date, metering.data, metering.observations, metering.tag]
             );
         });
 

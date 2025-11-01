@@ -95,6 +95,26 @@ export default function Home() {
         }
     }
 
+    async function handleOnSave(metering: any) {
+        try {
+            if (selectedMetering && selectedMetering.id !== undefined) {
+                await update(selectedMetering.id, {
+                    ...selectedMetering,
+                    patient_id: metering.patientId, // Garante que o ID do paciente seja atualizado se mudar
+                    observations: metering.observations,
+                    tag: metering.tag as 'red' | 'green' | 'blue',
+                });
+                console.log('Gravação atualizada com sucesso!');
+                loadMeterings();
+
+                setMeteringModalVisible(false);
+                setSelectedMetering(undefined);
+            }
+        } catch (error) {
+            console.error('Erro ao salvar metering:', error);
+        }
+    }
+
     const filteredMeterings = meterings
         .filter((m) => selectedTag === 'all' || m.tag === selectedTag)
         .sort((a, b) => {
@@ -174,23 +194,9 @@ export default function Home() {
                     setMeteringModalVisible(false);
                     setSelectedMetering(undefined);
                 }}
-                onSave={async (metering) => {
-                    try {
-                        if (selectedMetering && selectedMetering.id !== undefined) {
-                            await update(selectedMetering.id, {
-                                ...selectedMetering,
-                                observations: metering.observations,
-                                tag: metering.tag,
-                            });
-                            console.log('Gravação atualizada com sucesso!');
-                            loadMeterings();
-                        }
-                    } catch (error) {
-                        console.error('Erro ao salvar metering:', error);
-                    }
-                }}
+                onSave={handleOnSave}
                 isEditing={false}
-                initialData={selectedMetering}
+                meteringData={selectedMetering}
             />
         </View>
     );
