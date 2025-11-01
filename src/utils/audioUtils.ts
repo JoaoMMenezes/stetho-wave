@@ -97,8 +97,15 @@ export async function createWavFile(pcmData: number[]): Promise<string> {
     }
     const base64String = btoa(base64);
 
+    // 1. Gere um nome de arquivo único
+    const fileName = `recording-${Date.now()}.wav`;
+
+    // 2. Use 'documentDirectory' para persistência (em vez de 'cacheDirectory')
+    const uri = FileSystem.documentDirectory + fileName;
+
+    console.log('Salvando arquivo WAV em:', uri);
+
     // Salva o arquivo
-    const uri = FileSystem.cacheDirectory + 'recording.wav';
     await FileSystem.writeAsStringAsync(uri, base64String, {
         encoding: FileSystem.EncodingType.Base64,
     });

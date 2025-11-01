@@ -83,13 +83,13 @@ export default function MeteringModal({
                 setSelectedPatientId(initialData.patient_id);
                 setObservations(initialData.observations || '');
                 setSelectedTag(initialData.tag);
-                setIsEditingInternal(isEditing); // 'isEditing' será 'false' da Home
+                setIsEditingInternal(isEditing);
             } else {
                 // Modo "Nova Gravação" (Vindo da Metering)
                 setSelectedPatientId(patientId ?? null);
                 setObservations('');
                 setSelectedTag('blue');
-                setIsEditingInternal(true); // Sempre editável ao criar
+                setIsEditingInternal(true);
             }
         }
     }, [visible, initialData, isEditing, patientId]);
@@ -100,16 +100,12 @@ export default function MeteringModal({
             if (!visible) return;
 
             if (sound) {
-                // 1. Se recebemos um som pré-carregado (da tela Metering), usamos ele
                 setInternalSound(sound);
-
-                // ### ESTA É A CORREÇÃO ###
             } else if (initialData?.audio_uri) {
-                // 2. Se recebemos initialData (da Home), carregamos o som da URI
                 try {
                     await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
                     const { sound: newSound } = await Audio.Sound.createAsync({
-                        uri: initialData.audio_uri, // Usar initialData.audio_uri
+                        uri: initialData.audio_uri,
                     });
                     setInternalSound(newSound);
                 } catch (error) {
@@ -121,10 +117,9 @@ export default function MeteringModal({
 
         loadSound();
 
-        // Função de limpeza
+        // Função de limpeza (executa quando o modal fecha ou props mudam)
         return () => {
             if (internalSound) {
-                // Só descarrega o som se ele foi carregado INTERNAMENTE (via URI)
                 if (!sound && internalSound.unloadAsync) {
                     console.log('Descarregando áudio interno do modal');
                     internalSound.unloadAsync();
@@ -132,7 +127,6 @@ export default function MeteringModal({
                 setInternalSound(null);
             }
         };
-        // ### ATUALIZE AS DEPENDÊNCIAS ###
     }, [visible, sound, initialData]);
 
     const handleSave = () => {
