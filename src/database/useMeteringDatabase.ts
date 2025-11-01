@@ -4,11 +4,13 @@ export type Metering = {
     id: number;
     patient_id: number;
     date: string;
-    data: string;
+    data: number[];
     audio_uri?: string;
     tag: 'red' | 'green' | 'blue';
     observations?: string;
 };
+
+type RawMeteringRow = Omit<Metering, 'data'> & { data: string };
 
 export function useMeteringDatabase() {
     const database = useSQLiteContext();
@@ -70,10 +72,11 @@ export function useMeteringDatabase() {
 
     async function get(id: number): Promise<Metering | null> {
         try {
-            const result = await database.getFirstAsync<Metering>(
+            const result = await database.getFirstAsync<RawMeteringRow>(
                 `SELECT * FROM metering WHERE id = ?`,
                 [id]
             );
+            // Faz o parse antes de retornar, garantindo o tipo Metering
             return result ? { ...result, data: JSON.parse(result.data) } : null;
         } catch (error) {
             throw error;
@@ -82,10 +85,11 @@ export function useMeteringDatabase() {
 
     async function searchByPatientId(patientId: number) {
         try {
-            const result = await database.getAllAsync<Metering>(
+            const result = await database.getAllAsync<RawMeteringRow>(
                 `SELECT * FROM metering WHERE patient_id = ? ORDER BY date DESC`,
                 [patientId]
             );
+            // Faz o parse de cada linha
             return result.map((row) => ({
                 ...row,
                 data: JSON.parse(row.data),
@@ -97,9 +101,10 @@ export function useMeteringDatabase() {
 
     async function getAll(): Promise<Metering[]> {
         try {
-            const result = await database.getAllAsync<Metering>(
+            const result = await database.getAllAsync<RawMeteringRow>(
                 `SELECT * FROM metering ORDER BY date DESC`
             );
+            // Faz o parse de cada linha
             return result.map((row) => ({
                 ...row,
                 data: JSON.parse(row.data),

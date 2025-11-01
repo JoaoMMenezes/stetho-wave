@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, Pressable, Dimensions, Text, Platform, Alert } from 'react-native'; // Adicionado Alert
+import { View, Pressable, Dimensions, Alert } from 'react-native';
 import { Audio } from 'expo-av';
-import { Recording } from 'expo-av/build/Audio';
 import React from 'react';
 import { styles } from './_layout';
 import SkiaLineChart from '@/components/SkiaLineChart/SkiaLineChart';
@@ -9,18 +8,11 @@ import { MaterialIcons, Feather, FontAwesome6 } from '@expo/vector-icons';
 import MeteringModal from '@/components/MeteringModal/MeteringModal';
 import { Patient, usePatientDatabase } from '@/database/usePatientDatabase';
 import { useMeteringDatabase } from '@/database/useMeteringDatabase';
+import type { Metering } from '@/database/useMeteringDatabase';
+import * as FileSystem from 'expo-file-system';
 import SettingsModal from '@/components/SettingsModal/SettingsModal';
 import { Device } from 'react-native-ble-plx';
-import * as FileSystem from 'expo-file-system';
 import { createWavFile } from '@/utils/audioUtils';
-
-interface RecordingData {
-    uri: string;
-    meteringData: number[];
-    patientName: string;
-    date: string;
-    observations: string;
-}
 
 const MAX_DATA_POINTS_CHART = 20000;
 // Defina a janela de tempo que você quer exibir. 2 segundos é um bom começo.
@@ -40,6 +32,7 @@ export default function Metering() {
     const [currentMeteringData, setCurrentMeteringData] = useState<number[]>([0]);
     const [isRecording, setIsRecording] = useState(false);
     const [sound, setSound] = useState<Audio.Sound | null>(null);
+    const [meteringToSave, setMeteringToSave] = useState<Partial<Metering> | undefined>(undefined);
 
     const isRecordingRef = useRef(isRecording);
     const fullRecordingDataRef = useRef<number[]>([]);
@@ -124,11 +117,23 @@ export default function Metering() {
     }
 
     function handleSaveData() {
-        if (currentMeteringData.length === 0) {
+        if (fullRecordingDataRef.current.length === 0) {
             console.warn('Nenhum dado BLE para salvar.');
             Alert.alert('Atenção', 'Não há dados Bluetooth para salvar.');
             return;
         }
+
+        // 1. Constrói o objeto Parcial de Medição
+        const partialMetering: Partial<Metering> = {
+            data: fullRecordingDataRef.current,
+            audio_uri: recordingUri,
+            date: new Date().toISOString(),
+            tag: 'blue', // default
+            observations: '',
+        };
+
+        // 2. Salva no state para passar ao Modal
+        setMeteringToSave(partialMetering);
         setSaveModalVisible(true);
     }
 
@@ -232,29 +237,42 @@ export default function Metering() {
 
             <MeteringModal
                 visible={saveModalVisible}
-                sound={sound}
-                graphData={fullRecordingDataRef.current}
                 isEditing={true}
-                onClose={() => setSaveModalVisible(false)}
+                onClose={() => {
+                    setSaveModalVisible(false);
+                    setMeteringToSave(undefined); // Limpa o objeto ao fechar
+                }}
+                // --- PROPS ATUALIZADAS ---
+                meteringData={meteringToSave}
+                soundObject={sound}
+                // ---
+
                 onSave={async ({ patientId, tag, observations }) => {
-                    if (fullRecordingDataRef.current.length === 0) {
+                    // Usamos o 'meteringToSave' que está no state
+                    if (!meteringToSave || !meteringToSave.data) {
                         console.error('Nenhum dado de medição para salvar.');
+                        Alert.alert('Erro', 'Dados da medição não encontrados.');
                         setSaveModalVisible(false);
                         return;
                     }
+
                     try {
                         await create({
                             patient_id: patientId,
-                            date: new Date().toISOString(),
-                            data: JSON.stringify(fullRecordingDataRef.current),
-                            audio_uri: recordingUri,
-                            tag: tag ?? 'blue',
-                            observations: observations ?? '',
+                            date: meteringToSave.date!,
+                            data: meteringToSave.data!,
+                            audio_uri: meteringToSave.audio_uri,
+                            tag: tag,
+                            observations: observations,
                         });
+
                         console.log('Medição salva com sucesso!');
+
+                        // Limpeza
                         setRecordingUri(undefined);
                         setCurrentMeteringData([0]);
                         setSaveModalVisible(false);
+                        setMeteringToSave(undefined);
                         fullRecordingDataRef.current = [];
                         if (sound) {
                             await sound.unloadAsync();

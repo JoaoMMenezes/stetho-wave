@@ -20,6 +20,9 @@ import { usePatientDatabase, Patient } from '@/database/usePatientDatabase';
 import { Metering } from '@/database/useMeteringDatabase';
 import { defaultTheme } from '@/themes/default';
 import { Audio } from 'expo-av';
+import { convertInt16SampleToPascal } from '@/utils/audioUtils';
+
+const MAX_POINTS_TO_RENDER_IN_PASCAL = 5000;
 
 interface MeteringModalProps {
     visible: boolean;
@@ -29,16 +32,9 @@ interface MeteringModalProps {
         observations: string;
         tag: 'red' | 'green' | 'blue';
     }) => void;
-
-    // --- Nossas Props Unificadas ---
-
-    // Para novas gravações (da tela Metering)
-    graphData?: number[];
-    sound?: Audio.Sound | null;
-
-    // Para gravações existentes (da tela Home)
-    initialData?: Metering;
-    patientId?: number; // Para o caso de vir de PatientProfileModal
+    meteringData?: Partial<Metering>;
+    soundObject?: Audio.Sound | null;
+    patientId?: number;
     isEditing?: boolean;
 }
 
@@ -46,9 +42,8 @@ export default function MeteringModal({
     visible,
     onClose,
     onSave,
-    graphData,
-    sound, // Prop da tela Metering
-    initialData,
+    meteringData,
+    soundObject,
     patientId,
     isEditing = true,
 }: MeteringModalProps) {
@@ -78,34 +73,38 @@ export default function MeteringModal({
         if (visible) {
             fetchPatients();
 
-            if (initialData) {
-                // Modo "Visualização/Edição" (Vindo da Home)
-                setSelectedPatientId(initialData.patient_id);
-                setObservations(initialData.observations || '');
-                setSelectedTag(initialData.tag);
+            // Popula os campos com base no meteringData unificado
+            if (meteringData) {
+                // Tenta pegar o ID do paciente do objeto, senão da prop 'patientId'
+                setSelectedPatientId(meteringData.patient_id ?? patientId ?? null);
+                setObservations(meteringData.observations || '');
+                setSelectedTag(meteringData.tag || 'blue');
                 setIsEditingInternal(isEditing);
             } else {
-                // Modo "Nova Gravação" (Vindo da Metering)
+                // Fallback (se nenhum dado for passado)
                 setSelectedPatientId(patientId ?? null);
                 setObservations('');
                 setSelectedTag('blue');
                 setIsEditingInternal(true);
             }
         }
-    }, [visible, initialData, isEditing, patientId]);
+    }, [visible, meteringData, isEditing, patientId]);
 
     // Efeito para carregar e descarregar o áudio
     useEffect(() => {
         const loadSound = async () => {
-            if (!visible) return;
+            if (!visible || !meteringData) return;
 
-            if (sound) {
-                setInternalSound(sound);
-            } else if (initialData?.audio_uri) {
+            // Caso 1: Vindo da tela Metering (som já carregado na prop 'soundObject')
+            if (soundObject) {
+                setInternalSound(soundObject);
+            }
+            // Caso 2: Vindo da Home (precisa carregar da URI)
+            else if (meteringData.audio_uri) {
                 try {
                     await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
                     const { sound: newSound } = await Audio.Sound.createAsync({
-                        uri: initialData.audio_uri,
+                        uri: meteringData.audio_uri,
                     });
                     setInternalSound(newSound);
                 } catch (error) {
@@ -117,17 +116,19 @@ export default function MeteringModal({
 
         loadSound();
 
-        // Função de limpeza (executa quando o modal fecha ou props mudam)
+        // Função de limpeza
         return () => {
             if (internalSound) {
-                if (!sound && internalSound.unloadAsync) {
-                    console.log('Descarregando áudio interno do modal');
+                // Só descarrega o som se ele foi carregado pela URI (vindo da Home)
+                // Se veio da prop 'soundObject' (tela Metering), a tela Metering gerencia ele
+                if (!soundObject && internalSound.unloadAsync) {
+                    console.log('Descarregando áudio (da URI) no modal');
                     internalSound.unloadAsync();
                 }
                 setInternalSound(null);
             }
         };
-    }, [visible, sound, initialData]);
+    }, [visible, soundObject, meteringData]);
 
     const handleSave = () => {
         if (!selectedPatientId) {
@@ -146,20 +147,30 @@ export default function MeteringModal({
 
     // Ela decide qual gráfico mostrar
     const chartDataToShow = useMemo(() => {
-        if (initialData?.data) {
-            // Caso 1: Vindo da Home, parseia o JSON
-            try {
-                return JSON.parse(initialData.data);
-            } catch (e) {
-                return [0];
+        // Pega os dados brutos (int16) do objeto unificado
+        const rawData = meteringData?.data;
+
+        if (!rawData || rawData.length === 0) {
+            return [0];
+        }
+
+        try {
+            // 1. Downsampling para performance (evitar converter 100.000 pontos)
+            let dataToConvert: number[] = rawData;
+            if (rawData.length > MAX_POINTS_TO_RENDER_IN_PASCAL) {
+                const step = Math.floor(rawData.length / MAX_POINTS_TO_RENDER_IN_PASCAL);
+                dataToConvert = rawData.filter((_, index) => index % step === 0);
             }
+
+            // 2. Converte os dados (amostrados ou completos) para Pascal
+            const pascalData = dataToConvert.map(convertInt16SampleToPascal);
+
+            return pascalData;
+        } catch (e) {
+            console.error('Erro ao converter dados para Pascal:', e);
+            return [0];
         }
-        if (graphData) {
-            // Caso 2: Vindo da Metering, usa a prop direta
-            return graphData;
-        }
-        return [0]; // Default
-    }, [initialData, graphData]);
+    }, [meteringData]);
 
     function getTagIcon(tag: string) {
         switch (tag) {
@@ -225,7 +236,6 @@ export default function MeteringModal({
                         <>
                             <View style={styles.graphHeader}>
                                 <Text style={styles.sectionTitle}>Gráfico da Ausculta</Text>
-                                {/* ... (Seu seletor de Tags - Ótimo) ... */}
                                 <View
                                     style={[
                                         styles.tagButtonGroup,
@@ -280,7 +290,7 @@ export default function MeteringModal({
                         {isEditingInternal ? (
                             <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
                                 <Text style={styles.buttonText}>
-                                    {initialData ? 'Atualizar' : 'Salvar'}
+                                    {meteringData?.id ? 'Atualizar' : 'Salvar'}
                                 </Text>
                             </TouchableOpacity>
                         ) : (

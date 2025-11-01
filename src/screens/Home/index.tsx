@@ -100,11 +100,15 @@ export default function Home() {
             if (selectedMetering && selectedMetering.id !== undefined) {
                 await update(selectedMetering.id, {
                     ...selectedMetering,
+                    patient_id: metering.patientId, // Garante que o ID do paciente seja atualizado se mudar
                     observations: metering.observations,
                     tag: metering.tag as 'red' | 'green' | 'blue',
                 });
                 console.log('Gravação atualizada com sucesso!');
                 loadMeterings();
+
+                setMeteringModalVisible(false);
+                setSelectedMetering(undefined);
             }
         } catch (error) {
             console.error('Erro ao salvar metering:', error);
@@ -190,9 +194,9 @@ export default function Home() {
                     setMeteringModalVisible(false);
                     setSelectedMetering(undefined);
                 }}
-                onSave={async (metering) => handleOnSave(metering)}
+                onSave={handleOnSave}
                 isEditing={false}
-                initialData={selectedMetering}
+                meteringData={selectedMetering}
             />
         </View>
     );
