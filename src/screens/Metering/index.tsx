@@ -12,7 +12,7 @@ import type { Metering } from '@/database/useMeteringDatabase';
 import * as FileSystem from 'expo-file-system';
 import SettingsModal from '@/components/SettingsModal/SettingsModal';
 import { Device } from 'react-native-ble-plx';
-import { createWavFile } from '@/utils/audioUtils';
+import { convertInt16SampleToPascal, createWavFile } from '@/utils/audioUtils';
 
 // Defina a janela de tempo que você quer exibir. 1 segundos é um bom começo.
 const SAMPLE_RATE = 20000; // Taxa de amostragem, conforme definido no ESP32
@@ -78,6 +78,20 @@ export default function Metering() {
         console.log('[startCapture] Is recording:', isRecording);
     }
 
+    function showFinalRecordingData(rawData: number[]) {
+        if (!rawData || rawData.length === 0) {
+            return [0];
+        }
+
+        try {
+            const pascalData = rawData.map(convertInt16SampleToPascal);
+            setCurrentMeteringData(pascalData);
+        } catch (e) {
+            console.error('Erro ao converter dados para Pascal:', e);
+            return currentMeteringData || [0];
+        }
+    }
+
     async function stopCapture() {
         console.log('[Metering stopCapture] Parando captura. ', 'isRecording era:', isRecording);
         setIsRecording(false);
@@ -88,6 +102,7 @@ export default function Metering() {
                 console.log('Criando arquivo .wav...');
                 // 1. Cria o arquivo .wav com os dados completos
                 const fileUri = await createWavFile(fullRecordingDataRef.current);
+                showFinalRecordingData(fullRecordingDataRef.current);
 
                 // 2. Salva a URI real (substitui 'ble_data')
                 setRecordingUri(fileUri);
@@ -188,7 +203,7 @@ export default function Metering() {
                     data={currentMeteringData}
                     fullscreenEnabled={true}
                     height={(screenDimensions.height - 50 - 30) * 0.55 - 40}
-                    // padding={screenDimensions.width * 0.05}
+                    scrollable={currentMeteringData.length > 0 && !isRecording}
                 />
             </View>
 
@@ -241,11 +256,8 @@ export default function Metering() {
                     setSaveModalVisible(false);
                     setMeteringToSave(undefined); // Limpa o objeto ao fechar
                 }}
-                // --- PROPS ATUALIZADAS ---
                 meteringData={meteringToSave}
                 soundObject={sound}
-                // ---
-
                 onSave={async ({ patientId, tag, observations }) => {
                     // Usamos o 'meteringToSave' que está no state
                     if (!meteringToSave || !meteringToSave.data) {
