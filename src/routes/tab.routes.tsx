@@ -6,7 +6,6 @@ import Patients from '../screens/Patients';
 import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 import { defaultTheme } from '@/themes/default';
 import { View } from 'react-native';
-import AudioBLEDebug from '@/components/TestBluetooth/AudioBLEDebug';
 
 const Tab = createBottomTabNavigator();
 

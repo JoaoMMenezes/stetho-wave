@@ -39,6 +39,14 @@ export default function SkiaLineChart({
     const font = useFont(require('../../../assets/fonts/SpaceMono-Regular.ttf'), 10);
     const [fullscreen, setFullscreen] = useState(false);
 
+    const maxAbsValue = useMemo(() => {
+        // Usa reduce para encontrar o máximo absoluto iterativamente, sem estourar a pilha
+        return data.reduce(
+            (max, current) => Math.max(max, Math.abs(current)),
+            1e-6 // Valor inicial (mínimo)
+        );
+    }, [data]);
+
     const renderChart = (renderHeight: number, fullWidth?: number) => {
         const PADDING_TOP = 20;
         const PADDING_BOTTOM = 30;
@@ -52,8 +60,9 @@ export default function SkiaLineChart({
         const chartWidth = canvasWidth - PADDING_LEFT - PADDING_RIGHT;
         const chartHeight = canvasHeight - PADDING_TOP - PADDING_BOTTOM;
 
-        const yAxisMax = 2.0;
-        const linesOffset = 1;
+        const yAxisMaxFromData = Math.ceil(maxAbsValue * 1.1 * 100) / 100;
+        const yAxisMax = Math.max(yAxisMaxFromData, 3); // mínimo de 0.1 Pa
+        const linesOffset = yAxisMax / 2; // espaçamento automático, pode ajustar
 
         const processedData = useMemo(() => {
             // Se for scrollável, ainda podemos ter dados demais

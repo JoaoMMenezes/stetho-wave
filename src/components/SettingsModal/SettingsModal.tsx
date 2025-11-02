@@ -122,9 +122,7 @@ export default function SettingsModal({
                     setIsConnected(true);
                     setIsLoading(false); // Conexão estabelecida, para o loading principal
 
-                    console.log('Descobrindo serviços e características...');
                     await connectedDev.discoverAllServicesAndCharacteristics();
-                    console.log('Serviços e características descobertos.');
 
                     // Notificar o componente pai sobre a conexão
                     onDeviceConnected(connectedDev);

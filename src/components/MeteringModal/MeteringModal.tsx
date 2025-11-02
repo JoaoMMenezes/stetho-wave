@@ -122,7 +122,6 @@ export default function MeteringModal({
                 // Só descarrega o som se ele foi carregado pela URI (vindo da Home)
                 // Se veio da prop 'soundObject' (tela Metering), a tela Metering gerencia ele
                 if (!soundObject && internalSound.unloadAsync) {
-                    console.log('Descarregando áudio (da URI) no modal');
                     internalSound.unloadAsync();
                 }
                 setInternalSound(null);
@@ -268,7 +267,6 @@ export default function MeteringModal({
                                 <Pressable
                                     style={styles.audioProgress}
                                     onPress={async () => {
-                                        console.log('Reproduzindo som do modal...');
                                         await internalSound.replayAsync();
                                     }}
                                 >

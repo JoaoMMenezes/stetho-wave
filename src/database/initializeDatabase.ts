@@ -49,6 +49,6 @@ export async function initializeDatabase(database: SQLiteDatabase) {
             );
         });
 
-        console.log('Banco de dados inicializado com dados de teste.');
+        console.log('[initializeDatabase.ts] Banco de dados inicializado com dados de teste.');
     }
 }

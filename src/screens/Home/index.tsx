@@ -104,7 +104,7 @@ export default function Home() {
                     observations: metering.observations,
                     tag: metering.tag as 'red' | 'green' | 'blue',
                 });
-                console.log('Gravação atualizada com sucesso!');
+                console.log('[Home] Gravação atualizada com sucesso!');
                 loadMeterings();
 
                 setMeteringModalVisible(false);

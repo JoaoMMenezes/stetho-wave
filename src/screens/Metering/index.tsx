@@ -75,7 +75,6 @@ export default function Metering() {
         }
 
         setIsRecording(true);
-        console.log('[startCapture] Is recording:', isRecording);
     }
 
     function showFinalRecordingData(rawData: number[]) {
@@ -85,6 +84,7 @@ export default function Metering() {
 
         try {
             const pascalData = rawData.map(convertInt16SampleToPascal);
+
             setCurrentMeteringData(pascalData);
         } catch (e) {
             console.error('Erro ao converter dados para Pascal:', e);
@@ -93,7 +93,6 @@ export default function Metering() {
     }
 
     async function stopCapture() {
-        console.log('[Metering stopCapture] Parando captura. ', 'isRecording era:', isRecording);
         setIsRecording(false);
 
         // Verifica se gravamos algum dado
@@ -162,7 +161,6 @@ export default function Metering() {
     }
 
     const handleDeviceConnected = (device: Device) => {
-        console.log('[Metering handleDeviceConnected] Dispositivo BLE conectado:', device.name);
         setBleDevice(device);
         Alert.alert(
             'Conectado',
