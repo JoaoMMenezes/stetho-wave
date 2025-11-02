@@ -155,16 +155,7 @@ export default function MeteringModal({
         }
 
         try {
-            // 1. Downsampling para performance (evitar converter 100.000 pontos)
-            let dataToConvert: number[] = rawData;
-            if (rawData.length > MAX_POINTS_TO_RENDER_IN_PASCAL) {
-                const step = Math.floor(rawData.length / MAX_POINTS_TO_RENDER_IN_PASCAL);
-                dataToConvert = rawData.filter((_, index) => index % step === 0);
-            }
-
-            // 2. Converte os dados (amostrados ou completos) para Pascal
-            const pascalData = dataToConvert.map(convertInt16SampleToPascal);
-
+            const pascalData = rawData.map(convertInt16SampleToPascal);
             return pascalData;
         } catch (e) {
             console.error('Erro ao converter dados para Pascal:', e);
@@ -268,6 +259,7 @@ export default function MeteringModal({
                                     data={chartDataToShow}
                                     fullscreenEnabled={true}
                                     height={screenDimensions.height * 0.4}
+                                    scrollable={true}
                                 />
                             </View>
 

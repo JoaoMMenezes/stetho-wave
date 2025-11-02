@@ -14,11 +14,10 @@ import SettingsModal from '@/components/SettingsModal/SettingsModal';
 import { Device } from 'react-native-ble-plx';
 import { createWavFile } from '@/utils/audioUtils';
 
-const MAX_DATA_POINTS_CHART = 20000;
-// Defina a janela de tempo que você quer exibir. 2 segundos é um bom começo.
+// Defina a janela de tempo que você quer exibir. 1 segundos é um bom começo.
 const SAMPLE_RATE = 20000; // Taxa de amostragem, conforme definido no ESP32
-const WINDOW_DURATION_SECONDS = 1; // Queremos exibir os últimos 2 segundos de dados
-const MAX_SAMPLES_IN_WINDOW = SAMPLE_RATE * WINDOW_DURATION_SECONDS; // = 64.000 amostras
+const WINDOW_DURATION_SECONDS = 1; // Queremos exibir os últimos 1 segundos de dados
+const MAX_SAMPLES_IN_WINDOW = SAMPLE_RATE * WINDOW_DURATION_SECONDS;
 
 export default function Metering() {
     const { create } = useMeteringDatabase();

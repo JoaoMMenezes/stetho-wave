@@ -1,21 +1,17 @@
-import React, { useEffect, useState, useMemo } from 'react';
-import { View, Text, Modal, TouchableOpacity, Button, Dimensions } from 'react-native';
+import React, { useState, useMemo } from 'react';
+import { View, Text, Modal, TouchableOpacity, Button, Dimensions, ScrollView } from 'react-native';
 import { Canvas, Path, Skia, useFont, Line, Text as SkiaText } from '@shopify/react-native-skia';
-import * as ScreenOrientation from 'expo-screen-orientation';
-import { styles } from './_layout'; // Seus estilos
+import { styles } from './_layout';
 
 interface SkiaLineChartProps {
     data: number[];
     height?: number;
-    // O padding agora é gerenciado internamente, então podemos simplificar as props
     fullscreenEnabled?: boolean;
+    scrollable?: boolean;
 }
 
-// A função de downsampling que criamos anteriormente continua útil
 function downsampleData(data: number[], targetPoints: number): number[] {
-    if (data.length <= targetPoints || targetPoints <= 0) {
-        return data;
-    }
+    if (data.length <= targetPoints || targetPoints <= 0) return data;
     const downsampled = [];
     const bucketSize = data.length / targetPoints;
     for (let i = 0; i < targetPoints; i++) {
@@ -25,9 +21,7 @@ function downsampleData(data: number[], targetPoints: number): number[] {
         if (bucket.length === 0) continue;
         let peak = bucket[0];
         for (let j = 1; j < bucket.length; j++) {
-            if (Math.abs(bucket[j]) > Math.abs(peak)) {
-                peak = bucket[j];
-            }
+            if (Math.abs(bucket[j]) > Math.abs(peak)) peak = bucket[j];
         }
         downsampled.push(peak);
     }
@@ -38,20 +32,19 @@ export default function SkiaLineChart({
     data,
     height = 300,
     fullscreenEnabled = false,
+    scrollable = false,
 }: SkiaLineChartProps) {
-    const font = useFont(require('../../../assets/fonts/SpaceMono-Regular.ttf'), 10); // Ajuste o tamanho da fonte se necessário
+    const font = useFont(require('../../../assets/fonts/SpaceMono-Regular.ttf'), 10);
     const [fullscreen, setFullscreen] = useState(false);
 
-    const renderChart = (renderHeight: number) => {
-        // --- Definição da Área do Gráfico ---
+    const renderChart = (renderHeight: number, fullWidth?: number) => {
         const PADDING_TOP = 20;
         const PADDING_BOTTOM = 30;
         const PADDING_LEFT = 40;
         const PADDING_RIGHT = 20;
 
         const screenWidth = Dimensions.get('window').width;
-
-        const canvasWidth = screenWidth * 0.8;
+        const canvasWidth = fullWidth || screenWidth * 0.8;
         const canvasHeight = renderHeight;
 
         const chartWidth = canvasWidth - PADDING_LEFT - PADDING_RIGHT;
@@ -60,10 +53,17 @@ export default function SkiaLineChart({
         const yAxisMax = 2.0;
         const linesOffset = 1;
 
-        const processedData = useMemo(
-            () => downsampleData(data, Math.floor(chartWidth)),
-            [data, chartWidth]
-        );
+        const processedData = useMemo(() => {
+            // Se for scrollável, ainda podemos ter dados demais
+            if (scrollable) {
+                // limite de pontos visíveis, ajustável
+                const MAX_POINTS_SCROLLABLE = 5000;
+                return downsampleData(data, MAX_POINTS_SCROLLABLE);
+            }
+
+            // comportamento normal (janela deslizante)
+            return downsampleData(data, Math.floor(chartWidth));
+        }, [data, chartWidth, scrollable]);
 
         const valueToY = (value: number) => {
             const chartZeroY = PADDING_TOP + chartHeight / 2;
@@ -84,9 +84,7 @@ export default function SkiaLineChart({
         }, [processedData, chartWidth]);
 
         const yAxisLabels = [];
-        for (let i = yAxisMax; i >= -yAxisMax; i -= linesOffset) {
-            yAxisLabels.push(i);
-        }
+        for (let i = yAxisMax; i >= -yAxisMax; i -= linesOffset) yAxisLabels.push(i);
 
         const xAxisLabels = [];
         const numLabelsX = 5;
@@ -95,17 +93,11 @@ export default function SkiaLineChart({
             const xPos = PADDING_LEFT + (chartWidth / (numLabelsX - 1)) * i;
             xAxisLabels.push({ text: `${dataIndex}`, x: xPos });
         }
-        if (xAxisLabels.length > 0) {
-            xAxisLabels[xAxisLabels.length - 1] = {
-                text: `${data.length - 1}`,
-                x: PADDING_LEFT + chartWidth,
-            };
-        }
 
         if (!font || data.length < 2) {
             return (
                 <View
-                    style={{ height: canvasHeight, alignSelf: 'center', justifyContent: 'center' }}
+                    style={{ height: canvasHeight, justifyContent: 'center', alignItems: 'center' }}
                 >
                     <Text>Aguardando dados suficientes...</Text>
                 </View>
@@ -114,15 +106,12 @@ export default function SkiaLineChart({
 
         return (
             <Canvas style={{ width: canvasWidth, height: canvasHeight }}>
-                {/* Eixo Y vertical */}
                 <Line
                     p1={{ x: PADDING_LEFT, y: PADDING_TOP }}
                     p2={{ x: PADDING_LEFT, y: PADDING_TOP + chartHeight }}
                     color="grey"
                     strokeWidth={1}
                 />
-
-                {/* NOVO: Label de unidade do Eixo Y (Pascal) */}
                 <SkiaText
                     x={PADDING_LEFT - 35}
                     y={PADDING_TOP - 10}
@@ -131,13 +120,10 @@ export default function SkiaLineChart({
                     color="grey"
                 />
 
-                {/* Linhas Guia Horizontais e Labels do Eixo Y */}
                 {yAxisLabels.map((label, index) => {
                     const y = valueToY(label);
-
-                    // ALTERAÇÃO: Condicional para destacar a linha do zero
                     const isZeroAxis = label === 0;
-                    const lineColor = isZeroAxis ? '#999999' : '#e0e0e0'; // Cinza mais escuro para o eixo zero
+                    const lineColor = isZeroAxis ? '#999999' : '#e0e0e0';
                     const lineWidth = isZeroAxis ? 1 : 0.5;
 
                     return (
@@ -159,7 +145,6 @@ export default function SkiaLineChart({
                     );
                 })}
 
-                {/* Labels do Eixo X */}
                 {xAxisLabels.map((label, index) => (
                     <SkiaText
                         key={index}
@@ -171,11 +156,25 @@ export default function SkiaLineChart({
                     />
                 ))}
 
-                {/* Path Principal com os dados */}
                 <Path path={path} color="#6A5ACD" style="stroke" strokeWidth={2} />
             </Canvas>
         );
     };
+
+    const screenWidth = Dimensions.get('window').width;
+
+    // largura variável caso scrollable
+    const totalWidth = scrollable
+        ? Math.max(screenWidth * 0.8, data.length * ((screenWidth * 0.8) / 20000))
+        : screenWidth * 0.8;
+
+    const chartContent = scrollable ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator>
+            {renderChart(height, totalWidth)}
+        </ScrollView>
+    ) : (
+        renderChart(height)
+    );
 
     return (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
@@ -187,7 +186,7 @@ export default function SkiaLineChart({
                 </View>
             )}
 
-            {renderChart(height)}
+            {chartContent}
 
             {fullscreenEnabled && (
                 <Modal visible={fullscreen} animationType="slide">
@@ -195,7 +194,7 @@ export default function SkiaLineChart({
                         <View style={[styles.fullscreenHeader, { margin: 10 }]}>
                             <Button title="Fechar" onPress={() => setFullscreen(false)} />
                         </View>
-                        {renderChart(height)}
+                        {chartContent}
                     </View>
                 </Modal>
             )}
