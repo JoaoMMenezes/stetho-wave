@@ -10,6 +10,8 @@ interface SkiaLineChartProps {
     scrollable?: boolean;
 }
 
+const SAMPLE_RATE = 20000; // Hz
+
 function downsampleData(data: number[], targetPoints: number): number[] {
     if (data.length <= targetPoints || targetPoints <= 0) return data;
     const downsampled = [];
@@ -87,11 +89,29 @@ export default function SkiaLineChart({
         for (let i = yAxisMax; i >= -yAxisMax; i -= linesOffset) yAxisLabels.push(i);
 
         const xAxisLabels = [];
-        const numLabelsX = 5;
-        for (let i = 0; i < numLabelsX; i++) {
-            const dataIndex = Math.floor((data.length / (numLabelsX - 1)) * i);
-            const xPos = PADDING_LEFT + (chartWidth / (numLabelsX - 1)) * i;
-            xAxisLabels.push({ text: `${dataIndex}`, x: xPos });
+        const totalDurationSeconds = data.length / SAMPLE_RATE;
+        const secondsPerInterval = 0.5;
+
+        for (let s = 0; s < totalDurationSeconds; s += secondsPerInterval) {
+            const dataIndex = Math.floor(s * SAMPLE_RATE);
+
+            // A posição X é proporcional ao índice
+            const xPos = PADDING_LEFT + (dataIndex / (data.length - 1)) * chartWidth;
+
+            xAxisLabels.push({
+                text: s.toFixed(1), // "0.0", "0.5", "1.0"
+                x: xPos,
+            });
+        }
+
+        const lastDataIndex = data.length - 1;
+        const lastSecond = (lastDataIndex / SAMPLE_RATE).toFixed(2); // Mais precisão
+        const lastXPos = PADDING_LEFT + chartWidth;
+
+        // Evitar sobreposição da última label
+        // (Verifica se a última label está a mais de 40px da penúltima)
+        if (xAxisLabels.length === 0 || lastXPos - xAxisLabels[xAxisLabels.length - 1].x > 40) {
+            xAxisLabels.push({ text: lastSecond, x: lastXPos });
         }
 
         if (!font || data.length < 2) {
@@ -162,6 +182,7 @@ export default function SkiaLineChart({
     };
 
     const screenWidth = Dimensions.get('window').width;
+    const MAX_SCREEN_WIDTH = 8000;
 
     // largura variável caso scrollable
     const totalWidth = scrollable
@@ -170,7 +191,7 @@ export default function SkiaLineChart({
 
     const chartContent = scrollable ? (
         <ScrollView horizontal showsHorizontalScrollIndicator>
-            {renderChart(height, totalWidth)}
+            {renderChart(height, Math.min(totalWidth, MAX_SCREEN_WIDTH))}
         </ScrollView>
     ) : (
         renderChart(height)
