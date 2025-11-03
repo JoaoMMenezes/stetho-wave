@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { View, Text, Modal, TouchableOpacity, Button, Dimensions, ScrollView } from 'react-native';
 import { Canvas, Path, Skia, useFont, Line, Text as SkiaText } from '@shopify/react-native-skia';
 import { styles } from './_layout';
+import * as ScreenOrientation from 'expo-screen-orientation';
 
 interface SkiaLineChartProps {
     data: number[];
@@ -44,6 +45,25 @@ export default function SkiaLineChart({
 }: SkiaLineChartProps) {
     const font = useFont(require('../../../assets/fonts/SpaceMono-Regular.ttf'), 10);
     const [fullscreen, setFullscreen] = useState(false);
+
+    useEffect(() => {
+        async function changeOrientation() {
+            if (fullscreen) {
+                await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
+            } else {
+                await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+            }
+        }
+        changeOrientation();
+    }, [fullscreen]);
+
+    useEffect(() => {
+        const subscription = Dimensions.addEventListener('change', () => {
+            // Força re-render para atualizar largura/altura
+            setFullscreen((prev) => prev);
+        });
+        return () => subscription?.remove();
+    }, []);
 
     const scrollViewRef = useRef<ScrollView | null>(null);
     const chartContainerWidth = Dimensions.get('window').width * 0.8;
@@ -302,8 +322,10 @@ export default function SkiaLineChart({
 
             {fullscreenEnabled && (
                 <Modal visible={fullscreen} animationType="slide">
-                    <View style={styles.modalContent}>
-                        <View style={[styles.fullscreenHeader, { margin: 10 }]}>
+                    <View style={[styles.modalContent]}>
+                        <View
+                            style={[styles.fullscreenHeader, { margin: 15, alignSelf: 'flex-end' }]}
+                        >
                             <Button title="Fechar" onPress={() => setFullscreen(false)} />
                         </View>
                         {chartElement}

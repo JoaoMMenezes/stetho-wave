@@ -271,7 +271,7 @@ export default function Metering() {
                         style={styles.modalButton}
                         onPress={async () => {
                             console.log('Reproduzindo som...');
-                            await sound.replayAsync(); // Toca do início
+                            await sound.replayAsync();
                         }}
                     >
                         <MaterialIcons name="play-arrow" size={24} color="white" />
@@ -282,7 +282,11 @@ export default function Metering() {
                     style={styles.recordButton}
                     onPress={isRecording ? stopCapture : startCapture}
                 >
-                    <FontAwesome6 name={isRecording ? 'pause' : 'play'} size={24} color="#4dabf7" />
+                    <FontAwesome6
+                        name={isRecording ? 'pause' : 'microphone'}
+                        size={24}
+                        color="#4dabf7"
+                    />
                 </Pressable>
 
                 <Pressable style={styles.modalButton} onPress={handleSettings}>

@@ -42,6 +42,5 @@ export const styles = StyleSheet.create({
     modalContent: {
         flex: 1,
         backgroundColor: 'white',
-        paddingTop: 20,
     },
 });
