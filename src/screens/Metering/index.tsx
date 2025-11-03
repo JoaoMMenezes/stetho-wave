@@ -230,6 +230,10 @@ export default function Metering() {
         fullRecordingDataRef.current.push(...newRawSamples);
     };
 
+    const recordingDurationSeconds = isRecording
+        ? fullRecordingDataRef.current.length / SAMPLE_RATE
+        : undefined;
+
     return (
         <View style={styles.container}>
             <View style={styles.chartContainer}>
@@ -240,6 +244,7 @@ export default function Metering() {
                     scrollable={currentMeteringData.length > 0 && !isRecording}
                     playbackSampleIndex={currentPlaybackSample ?? undefined}
                     followPlayback={true}
+                    recordingDurationSeconds={recordingDurationSeconds}
                 />
             </View>
 

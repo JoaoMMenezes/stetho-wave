@@ -10,6 +10,7 @@ interface SkiaLineChartProps {
     scrollable?: boolean;
     playbackSampleIndex?: number;
     followPlayback?: boolean;
+    recordingDurationSeconds?: number;
 }
 
 const SAMPLE_RATE = 20000; // Hz
@@ -39,6 +40,7 @@ export default function SkiaLineChart({
     scrollable = false,
     playbackSampleIndex,
     followPlayback = true,
+    recordingDurationSeconds,
 }: SkiaLineChartProps) {
     const font = useFont(require('../../../assets/fonts/SpaceMono-Regular.ttf'), 10);
     const [fullscreen, setFullscreen] = useState(false);
@@ -111,25 +113,40 @@ export default function SkiaLineChart({
 
         const xAxisLabels = [];
         const totalDurationSeconds = data.length / SAMPLE_RATE;
-        const secondsPerInterval = 0.5;
 
-        for (let s = 0; s < totalDurationSeconds; s += secondsPerInterval) {
-            const dataIndex = Math.floor(s * SAMPLE_RATE);
+        // Se for 'scrollable' (pós-gravação), mostre todos os labels
+        if (scrollable) {
+            const secondsPerInterval = 0.5;
 
-            const xPos = PADDING_LEFT + (dataIndex / (data.length - 1)) * chartWidth;
+            for (let s = 0; s < totalDurationSeconds; s += secondsPerInterval) {
+                const dataIndex = Math.floor(s * SAMPLE_RATE);
+                const xPos = PADDING_LEFT + (dataIndex / (data.length - 1)) * chartWidth;
+
+                xAxisLabels.push({
+                    text: s.toFixed(1),
+                    x: xPos,
+                });
+            }
+
+            const lastDataIndex = data.length - 1;
+            const lastSecond = (lastDataIndex / SAMPLE_RATE).toFixed(2); // Mais precisão
+            const lastXPos = PADDING_LEFT + chartWidth;
+
+            if (xAxisLabels.length === 0 || lastXPos - xAxisLabels[xAxisLabels.length - 1].x > 40) {
+                xAxisLabels.push({ text: lastSecond, x: lastXPos });
+            }
+        }
+        // Se NÃO for 'scrollable' (durante a gravação), mostre APENAS o tempo total
+        else {
+            // Usa o tempo total da gravação, ou (como fallback) a duração da janela atual
+            const elapsedSeconds = recordingDurationSeconds ?? totalDurationSeconds;
+            const lastXPos = PADDING_LEFT + chartWidth;
 
             xAxisLabels.push({
-                text: s.toFixed(1),
-                x: xPos,
+                // Mostra o tempo decorrido formatado (ex: "5.2s")
+                text: elapsedSeconds.toFixed(1) + 's',
+                x: lastXPos,
             });
-        }
-
-        const lastDataIndex = data.length - 1;
-        const lastSecond = (lastDataIndex / SAMPLE_RATE).toFixed(2); // Mais precisão
-        const lastXPos = PADDING_LEFT + chartWidth;
-
-        if (xAxisLabels.length === 0 || lastXPos - xAxisLabels[xAxisLabels.length - 1].x > 40) {
-            xAxisLabels.push({ text: lastSecond, x: lastXPos });
         }
 
         if (!font || data.length < 2) {
