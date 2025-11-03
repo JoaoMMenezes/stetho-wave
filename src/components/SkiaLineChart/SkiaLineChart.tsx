@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { View, Text, Modal, TouchableOpacity, Button, Dimensions, ScrollView } from 'react-native';
 import { Canvas, Path, Skia, useFont, Line, Text as SkiaText } from '@shopify/react-native-skia';
 import { styles } from './_layout';
@@ -8,6 +8,8 @@ interface SkiaLineChartProps {
     height?: number;
     fullscreenEnabled?: boolean;
     scrollable?: boolean;
+    playbackSampleIndex?: number;
+    followPlayback?: boolean;
 }
 
 const SAMPLE_RATE = 20000; // Hz
@@ -35,16 +37,18 @@ export default function SkiaLineChart({
     height = 300,
     fullscreenEnabled = false,
     scrollable = false,
+    playbackSampleIndex,
+    followPlayback = true,
 }: SkiaLineChartProps) {
     const font = useFont(require('../../../assets/fonts/SpaceMono-Regular.ttf'), 10);
     const [fullscreen, setFullscreen] = useState(false);
 
+    const scrollViewRef = useRef<ScrollView | null>(null);
+    const chartContainerWidth = Dimensions.get('window').width * 0.8;
+    const MAX_SCREEN_WIDTH = 8000;
+
     const maxAbsValue = useMemo(() => {
-        // Usa reduce para encontrar o máximo absoluto iterativamente, sem estourar a pilha
-        return data.reduce(
-            (max, current) => Math.max(max, Math.abs(current)),
-            1e-6 // Valor inicial (mínimo)
-        );
+        return data.reduce((max, current) => Math.max(max, Math.abs(current)), 1e-6);
     }, [data]);
 
     const renderChart = (renderHeight: number, fullWidth?: number) => {
@@ -61,19 +65,15 @@ export default function SkiaLineChart({
         const chartHeight = canvasHeight - PADDING_TOP - PADDING_BOTTOM;
 
         const yAxisMaxFromData = Math.ceil(maxAbsValue * 1.1 * 100) / 100;
-        const yAxisMax = Math.max(yAxisMaxFromData, 3); // mínimo de 0.1 Pa
-        const linesOffset = yAxisMax / 2; // espaçamento automático, pode ajustar
+        const yAxisMax = Math.max(yAxisMaxFromData, 3);
+        const linesOffset = yAxisMax / 2;
 
         const processedData = useMemo(() => {
-            // Se for scrollável, ainda podemos ter dados demais
             if (scrollable) {
-                // limite de pontos visíveis, ajustável
                 const MAX_POINTS_SCROLLABLE = 5000;
                 return downsampleData(data, MAX_POINTS_SCROLLABLE);
             }
-
-            // comportamento normal (janela deslizante)
-            return downsampleData(data, Math.floor(chartWidth));
+            return downsampleData(data, Math.max(2, Math.floor(chartWidth)));
         }, [data, chartWidth, scrollable]);
 
         const valueToY = (value: number) => {
@@ -81,10 +81,11 @@ export default function SkiaLineChart({
             return chartZeroY - (value / yAxisMax) * (chartHeight / 2);
         };
 
+        const scaleX = chartWidth / Math.max(1, processedData.length - 1);
+
         const path = useMemo(() => {
             if (processedData.length < 2) return Skia.Path.Make();
             const newPath = Skia.Path.Make();
-            const scaleX = chartWidth / (processedData.length - 1);
             newPath.moveTo(PADDING_LEFT, valueToY(processedData[0]));
             processedData.forEach((value, index) => {
                 if (index > 0) {
@@ -92,7 +93,18 @@ export default function SkiaLineChart({
                 }
             });
             return newPath;
-        }, [processedData, chartWidth]);
+        }, [processedData, chartWidth, scaleX]);
+
+        const indicatorX = useMemo(() => {
+            if (playbackSampleIndex == null || data.length < 2) return null;
+            const originalMaxIndex = Math.max(1, data.length - 1);
+            const processedMaxIndex = Math.max(1, processedData.length - 1);
+            const processedIndex = Math.round(
+                (playbackSampleIndex / originalMaxIndex) * processedMaxIndex
+            );
+            const x = PADDING_LEFT + processedIndex * scaleX;
+            return { x, processedIndex };
+        }, [playbackSampleIndex, data.length, processedData, scaleX]);
 
         const yAxisLabels = [];
         for (let i = yAxisMax; i >= -yAxisMax; i -= linesOffset) yAxisLabels.push(i);
@@ -104,11 +116,10 @@ export default function SkiaLineChart({
         for (let s = 0; s < totalDurationSeconds; s += secondsPerInterval) {
             const dataIndex = Math.floor(s * SAMPLE_RATE);
 
-            // A posição X é proporcional ao índice
             const xPos = PADDING_LEFT + (dataIndex / (data.length - 1)) * chartWidth;
 
             xAxisLabels.push({
-                text: s.toFixed(1), // "0.0", "0.5", "1.0"
+                text: s.toFixed(1),
                 x: xPos,
             });
         }
@@ -117,8 +128,6 @@ export default function SkiaLineChart({
         const lastSecond = (lastDataIndex / SAMPLE_RATE).toFixed(2); // Mais precisão
         const lastXPos = PADDING_LEFT + chartWidth;
 
-        // Evitar sobreposição da última label
-        // (Verifica se a última label está a mais de 40px da penúltima)
         if (xAxisLabels.length === 0 || lastXPos - xAxisLabels[xAxisLabels.length - 1].x > 40) {
             xAxisLabels.push({ text: lastSecond, x: lastXPos });
         }
@@ -186,25 +195,81 @@ export default function SkiaLineChart({
                 ))}
 
                 <Path path={path} color="#6A5ACD" style="stroke" strokeWidth={2} />
+
+                {indicatorX && (
+                    <>
+                        <Line
+                            p1={{ x: indicatorX.x, y: PADDING_TOP }}
+                            p2={{ x: indicatorX.x, y: PADDING_TOP + chartHeight }}
+                            color="#FF5252"
+                            strokeWidth={1.5}
+                        />
+                        <SkiaText
+                            x={indicatorX.x - 20}
+                            y={PADDING_TOP - 2}
+                            text={`${((playbackSampleIndex ?? 0) / SAMPLE_RATE).toFixed(2)}s`}
+                            font={font}
+                            color="#FF5252"
+                        />
+                    </>
+                )}
             </Canvas>
         );
     };
 
-    const screenWidth = Dimensions.get('window').width;
-    const MAX_SCREEN_WIDTH = 8000;
-
-    // largura variável caso scrollable
+    // largura total para ScrollView (se scrollable)
     const totalWidth = scrollable
-        ? Math.max(screenWidth * 0.8, data.length * ((screenWidth * 0.8) / 20000))
-        : screenWidth * 0.8;
+        ? Math.max(
+              chartContainerWidth,
+              data.length * (chartContainerWidth / Math.max(1, SAMPLE_RATE))
+          )
+        : chartContainerWidth;
 
-    const chartContent = scrollable ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator>
+    const chartElement = scrollable ? (
+        <ScrollView
+            ref={scrollViewRef}
+            horizontal
+            showsHorizontalScrollIndicator
+            scrollEventThrottle={16}
+        >
             {renderChart(height, Math.min(totalWidth, MAX_SCREEN_WIDTH))}
         </ScrollView>
     ) : (
         renderChart(height)
     );
+
+    // Efeito para auto-scroll quando playbackSampleIndex muda
+    useEffect(() => {
+        if (!scrollable || !followPlayback || playbackSampleIndex == null) return;
+        const PADDING_LEFT = 40;
+        const PADDING_RIGHT = 20;
+        const screenWidth = Dimensions.get('window').width;
+        const canvasWidth = Math.min(totalWidth, MAX_SCREEN_WIDTH);
+        const chartWidth = canvasWidth - PADDING_LEFT - PADDING_RIGHT;
+
+        const processedData = scrollable
+            ? downsampleData(data, 5000)
+            : downsampleData(data, Math.max(2, Math.floor(chartWidth)));
+        const scaleX = chartWidth / Math.max(1, processedData.length - 1);
+
+        const originalMaxIndex = Math.max(1, data.length - 1);
+        const processedMaxIndex = Math.max(1, processedData.length - 1);
+        const processedIndex = Math.round(
+            (playbackSampleIndex / originalMaxIndex) * processedMaxIndex
+        );
+        const x = PADDING_LEFT + processedIndex * scaleX;
+
+        const viewportWidth = screenWidth * 0.8;
+        const targetScrollX = Math.max(0, x - viewportWidth / 2);
+
+        const maxScrollX = Math.max(0, canvasWidth - viewportWidth);
+
+        const finalScrollX = Math.min(maxScrollX, targetScrollX);
+
+        if (scrollViewRef.current && (scrollViewRef.current as any).scrollTo) {
+            (scrollViewRef.current as any).scrollTo({ x: finalScrollX, animated: true });
+        }
+    }, [playbackSampleIndex, followPlayback, scrollable, data]);
 
     return (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
@@ -216,7 +281,7 @@ export default function SkiaLineChart({
                 </View>
             )}
 
-            {chartContent}
+            {chartElement}
 
             {fullscreenEnabled && (
                 <Modal visible={fullscreen} animationType="slide">
@@ -224,7 +289,7 @@ export default function SkiaLineChart({
                         <View style={[styles.fullscreenHeader, { margin: 10 }]}>
                             <Button title="Fechar" onPress={() => setFullscreen(false)} />
                         </View>
-                        {chartContent}
+                        {chartElement}
                     </View>
                 </Modal>
             )}

@@ -33,8 +33,42 @@ export default function Metering() {
     const [sound, setSound] = useState<Audio.Sound | null>(null);
     const [meteringToSave, setMeteringToSave] = useState<Partial<Metering> | undefined>(undefined);
 
+    const [currentPlaybackSample, setCurrentPlaybackSample] = useState<number | null>(null);
+    const lastUpdateRef = useRef<number>(0);
+    const PLAYBACK_UPDATE_MS = 20;
+
     const isRecordingRef = useRef(isRecording);
     const fullRecordingDataRef = useRef<number[]>([]);
+
+    useEffect(() => {
+        if (!sound) {
+            setCurrentPlaybackSample(null);
+            return;
+        }
+
+        const onStatus = (status: any) => {
+            if (!status || !status.isLoaded) return;
+            if (status.positionMillis == null) return;
+
+            const now = Date.now();
+            if (now - lastUpdateRef.current < PLAYBACK_UPDATE_MS) return; // throttle
+            lastUpdateRef.current = now;
+
+            const seconds = status.positionMillis / 1000.0;
+            const sampleIndexFloat = seconds * SAMPLE_RATE;
+            const sampleIndex = Math.round(sampleIndexFloat);
+            setCurrentPlaybackSample(sampleIndex);
+        };
+
+        sound.setOnPlaybackStatusUpdate(onStatus);
+
+        // cleanup
+        return () => {
+            try {
+                sound.setOnPlaybackStatusUpdate(null);
+            } catch (err) {}
+        };
+    }, [sound]);
 
     useEffect(() => {
         async function loadPatients() {
@@ -113,6 +147,8 @@ export default function Metering() {
                     { uri: fileUri },
                     { shouldPlay: false } // Não toca imediatamente
                 );
+
+                await newSound.setProgressUpdateIntervalAsync(20); // 50 H
                 setSound(newSound); // Salva o objeto de som no estado
             } catch (error) {
                 console.error('Erro ao criar ou carregar arquivo WAV:', error);
@@ -202,6 +238,8 @@ export default function Metering() {
                     fullscreenEnabled={true}
                     height={(screenDimensions.height - 50 - 30) * 0.55 - 40}
                     scrollable={currentMeteringData.length > 0 && !isRecording}
+                    playbackSampleIndex={currentPlaybackSample ?? undefined}
+                    followPlayback={true}
                 />
             </View>
 

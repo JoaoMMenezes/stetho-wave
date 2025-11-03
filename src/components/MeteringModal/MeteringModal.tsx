@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
     Modal,
     View,
@@ -22,7 +22,7 @@ import { defaultTheme } from '@/themes/default';
 import { Audio } from 'expo-av';
 import { convertInt16SampleToPascal } from '@/utils/audioUtils';
 
-const MAX_POINTS_TO_RENDER_IN_PASCAL = 5000;
+const SAMPLE_RATE = 20000; // Hz
 
 interface MeteringModalProps {
     visible: boolean;
@@ -62,6 +62,28 @@ export default function MeteringModal({
     const screenDimensions = Dimensions.get('window');
 
     const tags = ['red', 'green', 'blue'];
+
+    const [playbackSampleIndex, setPlaybackSampleIndex] = useState<number | null>(null);
+    const lastUpdateRefModal = useRef<number>(0);
+    const PLAYBACK_UPDATE_MS_MODAL = 20;
+
+    useEffect(() => {
+        if (!internalSound) {
+            setPlaybackSampleIndex(null);
+            return;
+        }
+        const onStatus = (status: any) => {
+            if (!status || !status.isLoaded) return;
+            const now = Date.now();
+            if (now - lastUpdateRefModal.current < PLAYBACK_UPDATE_MS_MODAL) return;
+            lastUpdateRefModal.current = now;
+            const seconds = status.positionMillis / 1000.0;
+            const sampleIndex = Math.round(seconds * SAMPLE_RATE);
+            setPlaybackSampleIndex(sampleIndex);
+        };
+        internalSound.setOnPlaybackStatusUpdate(onStatus);
+        return () => internalSound.setOnPlaybackStatusUpdate(null);
+    }, [internalSound]);
 
     useEffect(() => {
         async function fetchPatients() {
@@ -106,6 +128,7 @@ export default function MeteringModal({
                     const { sound: newSound } = await Audio.Sound.createAsync({
                         uri: meteringData.audio_uri,
                     });
+                    await newSound.setProgressUpdateIntervalAsync(20);
                     setInternalSound(newSound);
                 } catch (error) {
                     console.error('Erro ao carregar áudio no modal:', error);
@@ -259,6 +282,8 @@ export default function MeteringModal({
                                     fullscreenEnabled={true}
                                     height={screenDimensions.height * 0.4}
                                     scrollable={true}
+                                    playbackSampleIndex={playbackSampleIndex ?? undefined}
+                                    followPlayback={true}
                                 />
                             </View>
 
