@@ -26,7 +26,6 @@
 
 // OTIMIZAÇÃO: Ajusta o buffer de amostras para o tamanho máximo do pacote BLE (MTU)
 #define I2S_BUFFER_SAMPLES 250  // 257 amostras * 2 bytes/amostra = 514 bytes
-#define FILTER_ALPHA 0.25f
 
 //================================================================
 // --- VARIÁVEIS GLOBAIS E CALLBACKS ---
@@ -67,48 +66,37 @@ void audioStreamingTask(void *pvParameters) {
     int16_t processed_samples[I2S_BUFFER_SAMPLES];
     size_t bytes_read = 0;
 
-    // --- FILTRO ---
-    // Variável estática para guardar o último valor do filtro
-    // Usamos float para manter a precisão da matemática do filtro
-    static float filtered_value = 0.0f; 
-    // --- FIM FILTRO ---
+    float filtered_prev = 0.0f;
 
-    while (true) { // Loop infinito da tarefa
+    while (true) {
         if (deviceConnected) {
-            // 1. LER UM BLOCO DE DADOS DO MICROFONE
             esp_err_t result = i2s_read(I2S_PORT, &raw_samples, sizeof(raw_samples), &bytes_read, portMAX_DELAY);
 
             if (result == ESP_OK && bytes_read > 0) {
                 int samples_read = bytes_read / sizeof(int32_t);
 
-                // 2. PROCESSAR OS DADOS (AGORA COM FILTRO)
                 for (int i = 0; i < samples_read; i++) {
-                    
-                    // --- FILTRO ---
-                    // Aplica o filtro IIR de primeira ordem
-                    // y[n] = a * x[n] + (1 - a) * y[n-1]
-                    // Onde 'a' é FILTER_ALPHA, x[n] é a amostra atual, y[n-1] é o último valor filtrado
-                    
-                    // Convertemos a amostra bruta para float para o cálculo
-                    float current_sample = (float)raw_samples[i]; 
-                    
-                    // Aplica a fórmula do filtro
-                    filtered_value = (FILTER_ALPHA * current_sample) + ((1.0f - FILTER_ALPHA) * filtered_value);
-                    // --- FIM FILTRO ---
+                    // Normaliza o sinal para float
+                    float sample = (float)(raw_samples[i] >> 14);
 
+                    // Filtro passa-baixa simples: y[n] = α * x[n] + (1 - α) * y[n-1]
+                    const float alpha = 0.05f; // Ajuste entre 0.01 (muito suave) e 0.1 (menos suave)
+                    float filtered = alpha * sample + (1.0f - alpha) * filtered_prev;
 
-                    // 3. CONVERTER PARA 16-BIT APÓS O FILTRO
-                    // Nós convertemos o 'filtered_value' (que é float) de volta
-                    // para int32_t antes de fazer o shift.
-                    processed_samples[i] = (int16_t)((int32_t)filtered_value >> 14);
+                    if (filtered > 32767.0f) filtered = 32767.0f;
+                    else if (filtered < -32768.0f) filtered = -32768.0f;
+                    
+                    filtered_prev = filtered;
+
+                    // Converte de volta para int16_t
+                    processed_samples[i] = (int16_t)filtered;
                 }
 
-                // 4. ENVIAR OS DADOS PROCESSADOS VIA BLE
+                // Envia o sinal filtrado via BLE
                 pCharacteristic->setValue((uint8_t*)processed_samples, samples_read * sizeof(int16_t));
                 pCharacteristic->notify();
             }
         } else {
-            // Se não estiver conectado, aguarda um pouco
             vTaskDelay(pdMS_TO_TICKS(100));
         }
     }

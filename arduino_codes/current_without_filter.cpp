@@ -26,7 +26,6 @@
 
 // OTIMIZAÇÃO: Ajusta o buffer de amostras para o tamanho máximo do pacote BLE (MTU)
 #define I2S_BUFFER_SAMPLES 250  // 257 amostras * 2 bytes/amostra = 514 bytes
-#define FILTER_ALPHA 0.25f
 
 //================================================================
 // --- VARIÁVEIS GLOBAIS E CALLBACKS ---
@@ -67,12 +66,6 @@ void audioStreamingTask(void *pvParameters) {
     int16_t processed_samples[I2S_BUFFER_SAMPLES];
     size_t bytes_read = 0;
 
-    // --- FILTRO ---
-    // Variável estática para guardar o último valor do filtro
-    // Usamos float para manter a precisão da matemática do filtro
-    static float filtered_value = 0.0f; 
-    // --- FIM FILTRO ---
-
     while (true) { // Loop infinito da tarefa
         if (deviceConnected) {
             // 1. LER UM BLOCO DE DADOS DO MICROFONE
@@ -81,34 +74,17 @@ void audioStreamingTask(void *pvParameters) {
             if (result == ESP_OK && bytes_read > 0) {
                 int samples_read = bytes_read / sizeof(int32_t);
 
-                // 2. PROCESSAR OS DADOS (AGORA COM FILTRO)
+                // 2. PROCESSAR OS DADOS
                 for (int i = 0; i < samples_read; i++) {
-                    
-                    // --- FILTRO ---
-                    // Aplica o filtro IIR de primeira ordem
-                    // y[n] = a * x[n] + (1 - a) * y[n-1]
-                    // Onde 'a' é FILTER_ALPHA, x[n] é a amostra atual, y[n-1] é o último valor filtrado
-                    
-                    // Convertemos a amostra bruta para float para o cálculo
-                    float current_sample = (float)raw_samples[i]; 
-                    
-                    // Aplica a fórmula do filtro
-                    filtered_value = (FILTER_ALPHA * current_sample) + ((1.0f - FILTER_ALPHA) * filtered_value);
-                    // --- FIM FILTRO ---
-
-
-                    // 3. CONVERTER PARA 16-BIT APÓS O FILTRO
-                    // Nós convertemos o 'filtered_value' (que é float) de volta
-                    // para int32_t antes de fazer o shift.
-                    processed_samples[i] = (int16_t)((int32_t)filtered_value >> 14);
+                    processed_samples[i] = (int16_t)(raw_samples[i] >> 14);
                 }
 
-                // 4. ENVIAR OS DADOS PROCESSADOS VIA BLE
+                // 3. ENVIAR OS DADOS PROCESSADOS VIA BLE
                 pCharacteristic->setValue((uint8_t*)processed_samples, samples_read * sizeof(int16_t));
                 pCharacteristic->notify();
             }
         } else {
-            // Se não estiver conectado, aguarda um pouco
+            // Se não estiver conectado, aguarda um pouco para não consumir 100% da CPU
             vTaskDelay(pdMS_TO_TICKS(100));
         }
     }
