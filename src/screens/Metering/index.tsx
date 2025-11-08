@@ -135,6 +135,13 @@ export default function Metering() {
                 console.log('Criando arquivo .wav...');
                 // 1. Cria o arquivo .wav com os dados completos
                 const fileUri = await createWavFile(fullRecordingDataRef.current);
+                const fileInfo = await FileSystem.getInfoAsync(fileUri);
+                if (fileInfo.exists) {
+                    console.log(
+                        `Gravação de ${fullRecordingDataRef.current.length / SAMPLE_RATE}s:`
+                    );
+                    console.log(`Tamanho do .wav: ${fileInfo.size / (1024 * 1024)} MB`);
+                }
                 showFinalRecordingData(fullRecordingDataRef.current);
 
                 // 2. Salva a URI real (substitui 'ble_data')

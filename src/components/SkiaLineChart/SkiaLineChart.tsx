@@ -67,7 +67,7 @@ export default function SkiaLineChart({
 
     const scrollViewRef = useRef<ScrollView | null>(null);
     const chartContainerWidth = Dimensions.get('window').width * 0.8;
-    const MAX_SCREEN_WIDTH = 8000;
+    const MAX_SCREEN_WIDTH = 5000;
 
     const maxAbsValue = useMemo(() => {
         return data.reduce((max, current) => Math.max(max, Math.abs(current)), 1e-6);
