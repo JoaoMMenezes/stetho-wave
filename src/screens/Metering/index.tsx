@@ -266,18 +266,6 @@ export default function Metering() {
                     />
                 </Pressable>
 
-                {sound && !isRecording && (
-                    <Pressable
-                        style={styles.modalButton}
-                        onPress={async () => {
-                            console.log('Reproduzindo som...');
-                            await sound.replayAsync();
-                        }}
-                    >
-                        <MaterialIcons name="play-arrow" size={24} color="white" />
-                    </Pressable>
-                )}
-
                 <Pressable
                     style={styles.recordButton}
                     onPress={isRecording ? stopCapture : startCapture}
@@ -294,6 +282,34 @@ export default function Metering() {
                 </Pressable>
             </View>
 
+            {/* Barra de progresso de reprodução */}
+            {sound && !isRecording && currentPlaybackSample !== null && (
+                <View style={styles.audioControlsContainer}>
+                    <Pressable
+                        style={styles.playButton}
+                        onPress={async () => {
+                            console.log('Reproduzindo som...');
+                            await sound.replayAsync();
+                        }}
+                    >
+                        <MaterialIcons name="play-arrow" size={28} color="white" />
+                    </Pressable>
+
+                    <View style={styles.progressBarContainer}>
+                        <View
+                            style={[
+                                styles.progressBarFill,
+                                {
+                                    width: `${
+                                        (currentPlaybackSample / currentMeteringData.length) * 100
+                                    }%`,
+                                },
+                            ]}
+                        />
+                    </View>
+                </View>
+            )}
+
             <MeteringModal
                 visible={saveModalVisible}
                 isEditing={true}
@@ -304,7 +320,6 @@ export default function Metering() {
                 meteringData={meteringToSave}
                 soundObject={sound}
                 onSave={async ({ patientId, tag, observations }) => {
-                    // Usamos o 'meteringToSave' que está no state
                     if (!meteringToSave || !meteringToSave.data) {
                         console.error('Nenhum dado de medição para salvar.');
                         Alert.alert('Erro', 'Dados da medição não encontrados.');
