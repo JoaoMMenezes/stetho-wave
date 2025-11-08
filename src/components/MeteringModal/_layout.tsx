@@ -119,4 +119,30 @@ export const styles = StyleSheet.create({
         fontWeight: 'bold',
         fontSize: 18,
     },
+    audioControlsContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 10,
+        width: '100%',
+    },
+    playButton: {
+        width: 50,
+        height: 50,
+        borderRadius: 25,
+        backgroundColor: defaultTheme.colors.primary,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 10,
+    },
+    progressBarContainer: {
+        flex: 1,
+        height: 4,
+        backgroundColor: '#fff',
+        borderRadius: 2,
+        overflow: 'hidden',
+    },
+    progressBarFill: {
+        height: '100%',
+        backgroundColor: defaultTheme.colors.primary,
+    },
 });

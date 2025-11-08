@@ -12,13 +12,12 @@ import type { Metering } from '@/database/useMeteringDatabase';
 import * as FileSystem from 'expo-file-system';
 import SettingsModal from '@/components/SettingsModal/SettingsModal';
 import { Device } from 'react-native-ble-plx';
-import { createWavFile } from '@/utils/audioUtils';
+import { convertInt16SampleToPascal, createWavFile } from '@/utils/audioUtils';
 
-const MAX_DATA_POINTS_CHART = 20000;
-// Defina a janela de tempo que você quer exibir. 2 segundos é um bom começo.
+// Defina a janela de tempo que você quer exibir. 1 segundos é um bom começo.
 const SAMPLE_RATE = 20000; // Taxa de amostragem, conforme definido no ESP32
-const WINDOW_DURATION_SECONDS = 1; // Queremos exibir os últimos 2 segundos de dados
-const MAX_SAMPLES_IN_WINDOW = SAMPLE_RATE * WINDOW_DURATION_SECONDS; // = 64.000 amostras
+const WINDOW_DURATION_SECONDS = 1; // Queremos exibir os últimos 1 segundos de dados
+const MAX_SAMPLES_IN_WINDOW = SAMPLE_RATE * WINDOW_DURATION_SECONDS;
 
 export default function Metering() {
     const { create } = useMeteringDatabase();
@@ -34,8 +33,42 @@ export default function Metering() {
     const [sound, setSound] = useState<Audio.Sound | null>(null);
     const [meteringToSave, setMeteringToSave] = useState<Partial<Metering> | undefined>(undefined);
 
+    const [currentPlaybackSample, setCurrentPlaybackSample] = useState<number | null>(null);
+    const lastUpdateRef = useRef<number>(0);
+    const PLAYBACK_UPDATE_MS = 20;
+
     const isRecordingRef = useRef(isRecording);
     const fullRecordingDataRef = useRef<number[]>([]);
+
+    useEffect(() => {
+        if (!sound) {
+            setCurrentPlaybackSample(null);
+            return;
+        }
+
+        const onStatus = (status: any) => {
+            if (!status || !status.isLoaded) return;
+            if (status.positionMillis == null) return;
+
+            const now = Date.now();
+            if (now - lastUpdateRef.current < PLAYBACK_UPDATE_MS) return; // throttle
+            lastUpdateRef.current = now;
+
+            const seconds = status.positionMillis / 1000.0;
+            const sampleIndexFloat = seconds * SAMPLE_RATE;
+            const sampleIndex = Math.round(sampleIndexFloat);
+            setCurrentPlaybackSample(sampleIndex);
+        };
+
+        sound.setOnPlaybackStatusUpdate(onStatus);
+
+        // cleanup
+        return () => {
+            try {
+                sound.setOnPlaybackStatusUpdate(null);
+            } catch (err) {}
+        };
+    }, [sound]);
 
     useEffect(() => {
         async function loadPatients() {
@@ -76,11 +109,24 @@ export default function Metering() {
         }
 
         setIsRecording(true);
-        console.log('[startCapture] Is recording:', isRecording);
+    }
+
+    function showFinalRecordingData(rawData: number[]) {
+        if (!rawData || rawData.length === 0) {
+            return [0];
+        }
+
+        try {
+            const pascalData = rawData.map(convertInt16SampleToPascal);
+
+            setCurrentMeteringData(pascalData);
+        } catch (e) {
+            console.error('Erro ao converter dados para Pascal:', e);
+            return currentMeteringData || [0];
+        }
     }
 
     async function stopCapture() {
-        console.log('[Metering stopCapture] Parando captura. ', 'isRecording era:', isRecording);
         setIsRecording(false);
 
         // Verifica se gravamos algum dado
@@ -89,6 +135,7 @@ export default function Metering() {
                 console.log('Criando arquivo .wav...');
                 // 1. Cria o arquivo .wav com os dados completos
                 const fileUri = await createWavFile(fullRecordingDataRef.current);
+                showFinalRecordingData(fullRecordingDataRef.current);
 
                 // 2. Salva a URI real (substitui 'ble_data')
                 setRecordingUri(fileUri);
@@ -100,6 +147,8 @@ export default function Metering() {
                     { uri: fileUri },
                     { shouldPlay: false } // Não toca imediatamente
                 );
+
+                await newSound.setProgressUpdateIntervalAsync(20); // 50 H
                 setSound(newSound); // Salva o objeto de som no estado
             } catch (error) {
                 console.error('Erro ao criar ou carregar arquivo WAV:', error);
@@ -148,7 +197,6 @@ export default function Metering() {
     }
 
     const handleDeviceConnected = (device: Device) => {
-        console.log('[Metering handleDeviceConnected] Dispositivo BLE conectado:', device.name);
         setBleDevice(device);
         Alert.alert(
             'Conectado',
@@ -182,6 +230,10 @@ export default function Metering() {
         fullRecordingDataRef.current.push(...newRawSamples);
     };
 
+    const recordingDurationSeconds = isRecording
+        ? fullRecordingDataRef.current.length / SAMPLE_RATE
+        : undefined;
+
     return (
         <View style={styles.container}>
             <View style={styles.chartContainer}>
@@ -189,7 +241,10 @@ export default function Metering() {
                     data={currentMeteringData}
                     fullscreenEnabled={true}
                     height={(screenDimensions.height - 50 - 30) * 0.55 - 40}
-                    // padding={screenDimensions.width * 0.05}
+                    scrollable={currentMeteringData.length > 0 && !isRecording}
+                    playbackSampleIndex={currentPlaybackSample ?? undefined}
+                    followPlayback={true}
+                    recordingDurationSeconds={recordingDurationSeconds}
                 />
             </View>
 
@@ -211,29 +266,49 @@ export default function Metering() {
                     />
                 </Pressable>
 
-                {sound && !isRecording && (
-                    <Pressable
-                        style={styles.modalButton}
-                        onPress={async () => {
-                            console.log('Reproduzindo som...');
-                            await sound.replayAsync(); // Toca do início
-                        }}
-                    >
-                        <MaterialIcons name="play-arrow" size={24} color="white" />
-                    </Pressable>
-                )}
-
                 <Pressable
                     style={styles.recordButton}
                     onPress={isRecording ? stopCapture : startCapture}
                 >
-                    <FontAwesome6 name={isRecording ? 'pause' : 'play'} size={24} color="#4dabf7" />
+                    <FontAwesome6
+                        name={isRecording ? 'pause' : 'microphone'}
+                        size={24}
+                        color="#4dabf7"
+                    />
                 </Pressable>
 
                 <Pressable style={styles.modalButton} onPress={handleSettings}>
                     <Feather name="settings" size={24} color="white" />
                 </Pressable>
             </View>
+
+            {/* Barra de progresso de reprodução */}
+            {sound && !isRecording && currentPlaybackSample !== null && (
+                <View style={styles.audioControlsContainer}>
+                    <Pressable
+                        style={styles.playButton}
+                        onPress={async () => {
+                            console.log('Reproduzindo som...');
+                            await sound.replayAsync();
+                        }}
+                    >
+                        <MaterialIcons name="play-arrow" size={28} color="white" />
+                    </Pressable>
+
+                    <View style={styles.progressBarContainer}>
+                        <View
+                            style={[
+                                styles.progressBarFill,
+                                {
+                                    width: `${
+                                        (currentPlaybackSample / currentMeteringData.length) * 100
+                                    }%`,
+                                },
+                            ]}
+                        />
+                    </View>
+                </View>
+            )}
 
             <MeteringModal
                 visible={saveModalVisible}
@@ -242,13 +317,9 @@ export default function Metering() {
                     setSaveModalVisible(false);
                     setMeteringToSave(undefined); // Limpa o objeto ao fechar
                 }}
-                // --- PROPS ATUALIZADAS ---
                 meteringData={meteringToSave}
                 soundObject={sound}
-                // ---
-
                 onSave={async ({ patientId, tag, observations }) => {
-                    // Usamos o 'meteringToSave' que está no state
                     if (!meteringToSave || !meteringToSave.data) {
                         console.error('Nenhum dado de medição para salvar.');
                         Alert.alert('Erro', 'Dados da medição não encontrados.');

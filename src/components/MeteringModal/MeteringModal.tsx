@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
     Modal,
     View,
@@ -22,7 +22,7 @@ import { defaultTheme } from '@/themes/default';
 import { Audio } from 'expo-av';
 import { convertInt16SampleToPascal } from '@/utils/audioUtils';
 
-const MAX_POINTS_TO_RENDER_IN_PASCAL = 5000;
+const SAMPLE_RATE = 20000; // Hz
 
 interface MeteringModalProps {
     visible: boolean;
@@ -62,6 +62,28 @@ export default function MeteringModal({
     const screenDimensions = Dimensions.get('window');
 
     const tags = ['red', 'green', 'blue'];
+
+    const [playbackSampleIndex, setPlaybackSampleIndex] = useState<number | null>(null);
+    const lastUpdateRefModal = useRef<number>(0);
+    const PLAYBACK_UPDATE_MS_MODAL = 20;
+
+    useEffect(() => {
+        if (!internalSound) {
+            setPlaybackSampleIndex(null);
+            return;
+        }
+        const onStatus = (status: any) => {
+            if (!status || !status.isLoaded) return;
+            const now = Date.now();
+            if (now - lastUpdateRefModal.current < PLAYBACK_UPDATE_MS_MODAL) return;
+            lastUpdateRefModal.current = now;
+            const seconds = status.positionMillis / 1000.0;
+            const sampleIndex = Math.round(seconds * SAMPLE_RATE);
+            setPlaybackSampleIndex(sampleIndex);
+        };
+        internalSound.setOnPlaybackStatusUpdate(onStatus);
+        return () => internalSound.setOnPlaybackStatusUpdate(null);
+    }, [internalSound]);
 
     useEffect(() => {
         async function fetchPatients() {
@@ -106,6 +128,7 @@ export default function MeteringModal({
                     const { sound: newSound } = await Audio.Sound.createAsync({
                         uri: meteringData.audio_uri,
                     });
+                    await newSound.setProgressUpdateIntervalAsync(20);
                     setInternalSound(newSound);
                 } catch (error) {
                     console.error('Erro ao carregar áudio no modal:', error);
@@ -122,7 +145,6 @@ export default function MeteringModal({
                 // Só descarrega o som se ele foi carregado pela URI (vindo da Home)
                 // Se veio da prop 'soundObject' (tela Metering), a tela Metering gerencia ele
                 if (!soundObject && internalSound.unloadAsync) {
-                    console.log('Descarregando áudio (da URI) no modal');
                     internalSound.unloadAsync();
                 }
                 setInternalSound(null);
@@ -155,16 +177,7 @@ export default function MeteringModal({
         }
 
         try {
-            // 1. Downsampling para performance (evitar converter 100.000 pontos)
-            let dataToConvert: number[] = rawData;
-            if (rawData.length > MAX_POINTS_TO_RENDER_IN_PASCAL) {
-                const step = Math.floor(rawData.length / MAX_POINTS_TO_RENDER_IN_PASCAL);
-                dataToConvert = rawData.filter((_, index) => index % step === 0);
-            }
-
-            // 2. Converte os dados (amostrados ou completos) para Pascal
-            const pascalData = dataToConvert.map(convertInt16SampleToPascal);
-
+            const pascalData = rawData.map(convertInt16SampleToPascal);
             return pascalData;
         } catch (e) {
             console.error('Erro ao converter dados para Pascal:', e);
@@ -268,21 +281,44 @@ export default function MeteringModal({
                                     data={chartDataToShow}
                                     fullscreenEnabled={true}
                                     height={screenDimensions.height * 0.4}
+                                    scrollable={true}
+                                    playbackSampleIndex={playbackSampleIndex ?? undefined}
+                                    followPlayback={true}
                                 />
                             </View>
 
-                            {/* BOTÃO DE PLAY (Sua lógica está ótima) */}
-                            {internalSound && (
-                                <Pressable
-                                    style={styles.audioProgress}
-                                    onPress={async () => {
-                                        console.log('Reproduzindo som do modal...');
-                                        await internalSound.replayAsync();
-                                    }}
-                                >
-                                    <MaterialIcons name="play-arrow" size={24} color="white" />
-                                </Pressable>
-                            )}
+                            {/* Container com botão + linha de progresso */}
+                            <View style={styles.audioControlsContainer}>
+                                {/* Botão de play */}
+                                {internalSound && (
+                                    <Pressable
+                                        style={styles.playButton}
+                                        onPress={async () => {
+                                            await internalSound.replayAsync();
+                                        }}
+                                    >
+                                        <MaterialIcons name="play-arrow" size={28} color="white" />
+                                    </Pressable>
+                                )}
+
+                                {/* Linha de progresso */}
+                                {chartDataToShow.length > 0 && playbackSampleIndex !== null && (
+                                    <View style={styles.progressBarContainer}>
+                                        <View
+                                            style={[
+                                                styles.progressBarFill,
+                                                {
+                                                    width: `${
+                                                        (playbackSampleIndex /
+                                                            chartDataToShow.length) *
+                                                        100
+                                                    }%`,
+                                                },
+                                            ]}
+                                        />
+                                    </View>
+                                )}
+                            </View>
                         </>
                     )}
 
