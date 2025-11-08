@@ -287,17 +287,38 @@ export default function MeteringModal({
                                 />
                             </View>
 
-                            {/* BOTÃO DE PLAY (Sua lógica está ótima) */}
-                            {internalSound && (
-                                <Pressable
-                                    style={styles.audioProgress}
-                                    onPress={async () => {
-                                        await internalSound.replayAsync();
-                                    }}
-                                >
-                                    <MaterialIcons name="play-arrow" size={24} color="white" />
-                                </Pressable>
-                            )}
+                            {/* Container com botão + linha de progresso */}
+                            <View style={styles.audioControlsContainer}>
+                                {/* Botão de play */}
+                                {internalSound && (
+                                    <Pressable
+                                        style={styles.playButton}
+                                        onPress={async () => {
+                                            await internalSound.replayAsync();
+                                        }}
+                                    >
+                                        <MaterialIcons name="play-arrow" size={28} color="white" />
+                                    </Pressable>
+                                )}
+
+                                {/* Linha de progresso */}
+                                {chartDataToShow.length > 0 && playbackSampleIndex !== null && (
+                                    <View style={styles.progressBarContainer}>
+                                        <View
+                                            style={[
+                                                styles.progressBarFill,
+                                                {
+                                                    width: `${
+                                                        (playbackSampleIndex /
+                                                            chartDataToShow.length) *
+                                                        100
+                                                    }%`,
+                                                },
+                                            ]}
+                                        />
+                                    </View>
+                                )}
+                            </View>
                         </>
                     )}
 
