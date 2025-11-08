@@ -30,10 +30,10 @@ export const styles = StyleSheet.create({
     },
     modalContent: {
         width: '90%',
-        height: '40%',
         backgroundColor: defaultTheme.colors.surface,
         borderRadius: 8,
         padding: 20,
+        gap: 10,
         justifyContent: 'space-between',
     },
     connectedInfo: {
@@ -49,9 +49,5 @@ export const styles = StyleSheet.create({
         backgroundColor: defaultTheme.colors.primary,
         borderRadius: 8,
         opacity: 0.5,
-    },
-    fonteEntrada: {
-        fontSize: 18,
-        marginVertical: 10,
     },
 });
