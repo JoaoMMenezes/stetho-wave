@@ -21,6 +21,7 @@ import { Metering } from '@/database/useMeteringDatabase';
 import { defaultTheme } from '@/themes/default';
 import { Audio } from 'expo-av';
 import { convertInt16SampleToPascal } from '@/utils/audioUtils';
+import * as Sharing from 'expo-sharing';
 
 const SAMPLE_RATE = 20000; // Hz
 
@@ -151,6 +152,27 @@ export default function MeteringModal({
             }
         };
     }, [visible, soundObject, meteringData]);
+
+    const handleShare = async () => {
+        const uri = meteringData?.audio_uri;
+
+        if (!uri) {
+            Alert.alert('Erro', 'Arquivo de áudio (.wav) não encontrado para esta gravação.');
+            return;
+        }
+
+        if (!(await Sharing.isAvailableAsync())) {
+            Alert.alert('Erro', 'O compartilhamento não está disponível neste dispositivo.');
+            return;
+        }
+
+        try {
+            await Sharing.shareAsync(uri);
+        } catch (error) {
+            console.error('Erro ao compartilhar arquivo:', error);
+            Alert.alert('Erro', 'Não foi possível compartilhar o arquivo.');
+        }
+    };
 
     const handleSave = () => {
         if (!selectedPatientId) {
@@ -288,9 +310,16 @@ export default function MeteringModal({
                             </View>
 
                             {/* Container com botão + linha de progresso */}
-                            <View style={styles.audioControlsContainer}>
-                                {/* Botão de play */}
-                                {internalSound && (
+                            {internalSound && (
+                                <View style={styles.audioControlsContainer}>
+                                    <Pressable
+                                        style={styles.playButton} // Reutilizando o mesmo estilo
+                                        onPress={handleShare}
+                                    >
+                                        <MaterialIcons name="share" size={28} color="white" />
+                                    </Pressable>
+
+                                    {/* Botão de play */}
                                     <Pressable
                                         style={styles.playButton}
                                         onPress={async () => {
@@ -299,26 +328,26 @@ export default function MeteringModal({
                                     >
                                         <MaterialIcons name="play-arrow" size={28} color="white" />
                                     </Pressable>
-                                )}
 
-                                {/* Linha de progresso */}
-                                {chartDataToShow.length > 0 && playbackSampleIndex !== null && (
-                                    <View style={styles.progressBarContainer}>
-                                        <View
-                                            style={[
-                                                styles.progressBarFill,
-                                                {
-                                                    width: `${
-                                                        (playbackSampleIndex /
-                                                            chartDataToShow.length) *
-                                                        100
-                                                    }%`,
-                                                },
-                                            ]}
-                                        />
-                                    </View>
-                                )}
-                            </View>
+                                    {/* Linha de progresso */}
+                                    {chartDataToShow.length > 0 && playbackSampleIndex !== null && (
+                                        <View style={styles.progressBarContainer}>
+                                            <View
+                                                style={[
+                                                    styles.progressBarFill,
+                                                    {
+                                                        width: `${
+                                                            (playbackSampleIndex /
+                                                                chartDataToShow.length) *
+                                                            100
+                                                        }%`,
+                                                    },
+                                                ]}
+                                            />
+                                        </View>
+                                    )}
+                                </View>
+                            )}
                         </>
                     )}
 
